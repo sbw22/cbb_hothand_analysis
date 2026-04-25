@@ -3,12 +3,7 @@ import json
 from datetime import datetime, timedelta
 
 
-def find_game_id(scoreboard_json, team1, team2):
-    for game in scoreboard_json['games']:
-        if team1 in game['home']['names']['short'] and team2 in game['away']['names']['short']:
-            return game['game_id']
-
-def main():
+def get_game_ids():
 
     conn = http.client.HTTPSConnection("ncaa-api.henrygd.me")
 
@@ -18,9 +13,9 @@ def main():
     list_of_game_ids = []
     counter = 0
     while specific_date < datetime(year=2026, month=4, day=15):
-        counter += 1
-        if counter == 5: # Only check the first 5 days of the season to avoid making too many API calls while testing
+        if counter == 1: # Only check the first 2 days of the season to avoid making too many API calls while testing
             break
+        counter += 1
         if counter % 10 == 0:
             print(f"Counter: {counter}, specific_date: {specific_date.strftime('%Y-%m-%d')}")
 
@@ -35,7 +30,7 @@ def main():
             print("Response was not valid JSON")
             print(decoded_data)
             return
-
+        
         # print(f"json_data: {json.dumps(json_data, indent=2)}")
         # print(f"json_data[0]: {json.dumps(json_data[0], indent=2)}")
 
@@ -59,6 +54,17 @@ def main():
 
         specific_date += timedelta(days=1)
         # break
+    
+    conn.close()
+    
+    return list_of_game_ids
+
+
+def get_pbp_data():
+
+    conn = http.client.HTTPSConnection("ncaa-api.henrygd.me")
+
+    list_of_game_ids = get_game_ids()
 
     print(f"Total number of games in the 2025-26 season: {len(list_of_game_ids)}")
     print(f"game_ids for the first 10 games: {list_of_game_ids[:10]}\n")
@@ -97,6 +103,54 @@ def main():
 
     conn.close()
 
+    print(f"keys of list_of_pbp_data[0]: {list_of_pbp_data[0].keys()}\n")  # Should include 'periods' and 'teams'
+
+    return list_of_pbp_data
+
+
+def get_all_player_stats_of_game(pbp_data):
+    # This function takes play-by-play data for one game, and returns a dict (for now). Keys of the dict are names of players in the game, 
+    # and values are lists of actions the player has in the game. Each item in the list should contain the type of action (e.g., "shot", 
+    # "pass", "rebound"), the time of the action, and any other relevant details (e.g., for a shot, whether it was made or missed, the 
+    # distance of the shot, etc.).
+
+    player_stats = {}
+
+    print(f"pbp_data keys: {pbp_data.keys()}\n")  # Should include 'periods' and 'teams'
+
+    print(f"pbp_data['periods'] length: {len(pbp_data['periods'])}\n")
+    dfg
+    return
+    for period in pbp_data['periods']:
+        for play in period['plays']:
+            for team in pbp_data['teams']:
+                for player in team['players']:
+                    if player['id'] == play['playerId']:
+                        player_name = player['name']
+                        action_type = play['type']
+                        action_time = play['time']
+                        # Add any other relevant details from the play data as needed
+                        action_details = {
+                            'type': action_type,
+                            'time': action_time,
+                            # Add other details here
+                        }
+                        if player_name not in player_stats:
+                            player_stats[player_name] = []
+                        player_stats[player_name].append(action_details)
+    return player_stats
+
+
+
+def main():
+    pbp_data = get_pbp_data()
+    print(f"Total number of games with play-by-play data: {len(pbp_data)}\n")
+    game_stats = get_all_player_stats_of_game(pbp_data[0])
+    print(f"Total number of players in the first game: {len(game_stats)}")
+
+    print(f"Player stats for the first game:")
+    for player, actions in game_stats.items():
+        print(f"  {player}: {len(actions)} actions")
 
 if __name__ == "__main__":
     main()
