@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 API_HOST = "ncaa-api.henrygd.me"
 # The first day we want to inspect for the 2025-26 college basketball season.
 SEASON_START = datetime(year=2025, month=11, day=3)
+SEASON_START = datetime(year=2026, month=1, day=1) # switched to Jan 1 for testing so we get conference games in the sample
 # The cutoff date for the season loop; the code walks day by day until this date.
 SEASON_END = datetime(year=2026, month=4, day=15)
 # Cap the number of games we fetch during testing so the script stays fast.
-MAX_TEST_GAMES = 10
+MAX_TEST_GAMES = 50
 
 
 def get_game_ids():
@@ -27,13 +28,12 @@ def get_game_ids():
     counter = 0
     while specific_date < SEASON_END:
         # Only inspect the first date in this reduced testing mode.
-        if counter == 1:
+        if counter > 10: #####################################################################################################################
             break
-        counter += 1
         # Format the date to match the API path shape YYYY/MM/DD.
         date_str = specific_date.strftime("%Y/%m/%d")
         # Request the daily scoreboard for Division I men's basketball.
-        conn.request("GET", f"/scoreboard/basketball-men/d1/{date_str}/all-conf")
+        conn.request("GET", f"/scoreboard/basketball-men/d1/{date_str}/all-conf") # switched all-conf to big-12
         # Read the HTTP response body so it can be parsed as JSON.
         res = conn.getresponse()
         data = res.read()
@@ -48,13 +48,29 @@ def get_game_ids():
             return
 
         # The scoreboard response contains a `games` array; each item wraps a game object.
+
         for game in json_data['games']:
             # Pull out the unique game identifier that will be used for play-by-play calls.
             game_id = game['game']['gameID']
+            home_team = game['game']['home']
+            away_team = game['game']['away']
+            home_team_conference = home_team['conferences'][0]['conferenceSeo']
+            away_team_conference = away_team['conferences'][0]['conferenceSeo']
+            if away_team_conference != "big-12" and home_team_conference != "big-12":
+                continue
+            counter += 1 # Only trigger counter if we find a big 12 game
+            if counter > 10: ######################################################################################################################
+                break
             list_of_game_ids.append(game_id)
+            print(f"len of list_of_game_ids: {len(list_of_game_ids)}, counter value: {counter}")
+            # print(f"keys in game object: {game['game'].keys()}")
+            # print(f"home team: {game['game']['home']}")#  , visitor team: {game['game']['away']}")
+            # print(f"big 12 team found")
 
         # Move forward one day and continue scanning the season schedule.
         specific_date += timedelta(days=1)
+        if len(json_data['games']) == 0:
+            print(f"No games found for {date_str}")
     
     # Close the connection before returning the accumulated game IDs.
     conn.close()
@@ -117,89 +133,143 @@ def get_all_player_stats_of_game(pbp_data):
         print(f"'periods' key not found in pbp_data\n")
         return {}
 
-    def extract_actor_name(play):
-        # Prefer the explicit first/last name fields because they are the most
-        # structured signal in the payload and avoid string parsing when present.
-        first_name = (play.get('firstName') or '').strip()
-        last_name = (play.get('lastName') or '').strip()
-        if first_name or last_name:
-            # Combine the two fields into one display name. Some non-player events use
-            # team names in these fields, so filter out obvious team-level labels.
-            full_name = f"{first_name} {last_name}".strip()
-            if full_name.lower() not in {'winthrop winthrop', 'queens (nc) queens (nc)'}:
-                return full_name
-
-        # Fall back to the human-readable event description when the structured name
-        # fields are empty. This is less reliable, but it still gives us a usable key.
-        event_description = (play.get('eventDescription') or '').strip()
-        # Skip events that are not useful for player-level grouping, such as timeouts
-        # and end-of-period markers.
-        if not event_description or "time out" in event_description.lower() or event_description.lower().startswith("end of"):
-            return None
-
-        # Substitution events store the player name after a hyphen, for example
-        # "Subbing in for Winthrop-Kareem Rozier".
-        if event_description.startswith("Subbing in for ") or event_description.startswith("Subbing out for "):
-            return event_description.split("-", 1)[-1].strip() if "-" in event_description else "Team"
-
-        # Many scoring, rebound, steal, and foul descriptions use the "team's player"
-        # format, so split on the possessive marker and keep the trailing name portion.
-        if "'s " in event_description:
-            candidate_name = event_description.rsplit("'s ", 1)[-1]
-        elif "'s" in event_description:
-            candidate_name = event_description.rsplit("'s", 1)[-1]
-        else:
-            # If the description does not mention a person at all, group it under a
-            # generic Team bucket so the event is still counted instead of dropped.
-            return "Team"
-
-        # Strip trailing context such as "(draws the foul)" so the label stays stable.
-        return candidate_name.split(" (", 1)[0].strip()
+    
+    # For some reason, each play is duplicated in the play-by-play data, so for now I am just going to skip the next event when we record an event.
+    skip_counter = False
 
     # Walk every period, then each play within the period, and attach the play to the
     # best actor label we can infer from the payload.
     for period in pbp_data['periods']:
-        for play in period.get('playbyplayStats', []):
-            # Pull the raw event text once so we do not repeatedly look up the same field.
-            event_description = (play.get('eventDescription') or '').strip()
-            if not event_description:
+
+        # My code starts here
+
+        for play in period['playbyplayStats']:
+            # print(f"")
+            if skip_counter:
+                skip_counter = False
+                continue
+            play_list = play['eventDescription'].split()
+
+            # Sometimes, the player's last name is concatenated with 'makes' or 'misses' in the event description, 
+            # so we need to split those apart to get the player's name and the shot result as separate tokens.
+            if play_list[1][-6:] == "misses":
+                # split apart players last name and the 'misses' string
+                play_list[1:2] = [play_list[1][:-6], 'misses']
+            elif play_list[1][-5:] == "makes":
+                # split apart players last name and the 'makes' string
+                play_list[1:2] = [play_list[1][:-5], 'makes']
+
+            player_name = play_list[0] + " " + play_list[1]
+
+
+            # Check if the event description contains the keywords that indicate a shot event, and print it if found.
+            # If not, skip to the next event. This is a quick way to filter for shot events without needing to parse 
+            # every single event description in detail.
+            if not (set(['three', 'two', 'point', 'shot']) & (set(play_list))):
+                continue
+            if (set(['blocks', 'layup', 'free', 'throw']) & (set(play_list))):
+                continue
+            # If the player name is one of the following, skip it because those are not actual players and will just 
+            # add noise to our player-level stats.
+            if player_name in ["TV timeout", "Subbing out", "Subbing in", "End of", "Team defensive", "Team offensive"]:
                 continue
 
-            # Derive the grouping key for this event. The helper prefers structured
-            # names first and only falls back to parsing text when necessary.
-            player_name = extract_actor_name(play)
-            if player_name is None:
-                continue
-            # Keep the original description plus a few useful metadata fields so later
-            # analysis can inspect the raw event without querying the API again.
-            action_details = {
-                'description': event_description,
-                'time': play.get('clock'),
-                'teamId': play.get('teamId'),
-                'score': play.get('score'),
-            }
+            # if play_list[0] == "Milan":
+            #     print(f"Found a shot event for Milan Momcilovic: {play['clock']}\n")
 
-            # Create the player's list on first use, then append each event in the order
-            # the API returned them, which is already chronological within each period.
             if player_name not in player_stats:
-                player_stats[player_name] = []
-            player_stats[player_name].append(action_details)
-    return player_stats
+                player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': []} # 0 = make, 1 = miss
 
+            
+            # Record whether the shot was a make or miss (0 or 1) in the appropriate sequence list for the player. This is a simple way to 
+            # track the player's shooting performance over time, and we can analyze these sequences later to identify hot hand patterns.
+            if 'makes' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
+                # print(f"Found a made 3pt shot: {play}")
+                player_stats[player_name]['three_point_sequence'].append(0)
+            elif 'misses' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
+                # print(f"Found a missed 3pt shot: {play}")
+                player_stats[player_name]['three_point_sequence'].append(1)
+            elif 'makes' in play_list and 'two' in play_list and 'point' in play_list and 'jump' in play_list and 'shot' in play_list:
+                # print(f"Found a made 2pt shot: {play}")
+                player_stats[player_name]['two_point_sequence'].append(0)
+            elif 'misses' in play_list and 'two' in play_list and 'point' in play_list and 'jump' in play_list and 'shot' in play_list:
+                # print(f"Found a missed 2pt shot: {play}")
+                player_stats[player_name]['two_point_sequence'].append(1)
+            else:
+                continue
+
+            skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
+            # which should prevent us from processing the duplicate event in the play-by-play data.
+        
+
+    return player_stats
+    # My code ends here
 
 
 def main():
     # Fetch the season sample, then summarize the first game as a quick smoke test.
     pbp_data = get_pbp_data()
     print(f"Finished getting play-by-play data for {len(pbp_data)} games.")
+
+    # lists that hold info from all games in the sample.
+    # Each item in total_game_stats is a dictionary of player stats for one game, structured like the output of get_all_player_stats_of_game().
+    appended_game_stats = []
+    # Each item in extended_game_stats is a player's shooting performance over multiple games, structured like the value for one player in 
+    # the output of get_all_player_stats_of_game().
+    extended_game_stats = []
+
     # Analyze the first returned contest because the script is still in exploratory mode.
-    game_stats = get_all_player_stats_of_game(pbp_data[0])
-    print(f"Total number of players in the first game: {len(game_stats)}")
+
+    print(f"Inspecting the first game's play-by-play data:")
+    # print(f"php_data[0]: {pbp_data[0].keys()}\n")
+    # print(f"php_data[0]['periods'] has {len(pbp_data[0]['periods'])} periods, with keys {list(pbp_data[0]['periods'][0].keys())}\n")
+    print(f"pbp_data[0]['periods'][0]['playbyplayStats'] has {len(pbp_data[0]['periods'][0]['playbyplayStats'])} events, with keys {pbp_data[0]['periods'][0]['playbyplayStats'][23]['homeText']}\n")
+
+    # game_stats = get_all_player_stats_of_game(pbp_data[0])
+
+    for game_info in pbp_data:
+        game_stats = get_all_player_stats_of_game(game_info)
+
+        appended_game_stats.append(game_stats)
+
+        for player, stats in game_stats.items():
+
+            if player not in extended_game_stats:
+                # structure of extended_game_stats = [{player: {'two_point_sequence': [...], 'three_point_sequence': [...]}}]
+                extended_game_stats.append({player: stats})
+                continue
+
+            extended_game_stats[player]['two_point_sequence'].extend(stats['two_point_sequence'])
+            extended_game_stats[player]['three_point_sequence'].extend(stats['three_point_sequence'])
+        # print(f"Total number of players in the first game: {len(game_stats)}")
 
     print("Player stats for the first game:")
+    for player, stats in appended_game_stats[0].items():
+        total_player_actions = len(stats['two_point_sequence']) + len(stats['three_point_sequence'])
+        print(f"  {player}: {total_player_actions} total actions (2pt: {len(stats['two_point_sequence'])}, 3pt: {len(stats['three_point_sequence'])})")
+    
+    print(f"games in appended_game_stats: {len(appended_game_stats)}")
+    return
+    
     for player, actions in game_stats.items():
         # Show how many recorded events were attached to each player-like key.
         print(f"  {player}: {len(actions)} actions")
+    return 
+    # print(f"game_stats['Team'] = {game_stats['Team']}")
+    print(f"\n\nDetailed actions for Team:")
+    for item in game_stats['Team']:
+        # print(f"  - {item['description']} at {item['time']} with score {item['score']}")
+        print(f"{item}")
+        print(f"homeText: {item['homeText']}")
+        print(f"visitorText: {item['visitorText']}\n")
+    
+    # Dissect the event descriptioins for player. For each shot, we should be getting shot type 
+    # (3pt, 2pt, layup, free throw), whether the shot was made or missed, time of event, and score of game).
+
+
+    
+
+
 
 if __name__ == "__main__":
     # Run the script only when executed directly, not when imported as a module.
