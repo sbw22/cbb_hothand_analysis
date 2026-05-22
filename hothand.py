@@ -1,6 +1,7 @@
 import http.client
 import json
 from datetime import datetime, timedelta
+from math import exp
 
 
 # Centralize the API host and season boundaries so the rest of the script can
@@ -215,7 +216,8 @@ def get_all_player_stats_of_game(pbp_data):
     # to assume an equal probability of being in each state, but later maybe I can include player stats in here.
 
 # Hidden States
-    # Zin = ∈ {C, N, H} where C = cold, N = neutral, H = hot. These states are hidden because we can't directly observe whether a player is in a hot or cold state, we can only infer it from their shooting performance.
+    # Zin = ∈ {C, N, H} where C = cold, N = neutral, H = hot. These states are hidden because we can't directly 
+    # observe whether a player is in a hot or cold state, we can only infer it from their shooting performance.
     # i = game index, n = shot number, Zin = hidden state during shot n of game i.
     # Yin = Observed shot outcome, made or missed ∈ {0, 1} where 0 = made shot, 1 = missed shot.
 
@@ -254,6 +256,70 @@ def get_all_player_stats_of_game(pbp_data):
     # bi = How much a game deviates from the average. Given its game i do we know if the player will 
     # be more streaky? If so, bi(jH) = +0.8 -> increase probability of transitioning to hot
 
+
+def feature_vector():
+    # This is a placeholder function that should return the feature vector Xi for a given shot. 
+    # In a real implementation, this function would extract relevant features from the dataset, such as shot distance, time remaining, fatigue level, defender distance, etc.
+    # For now, it just returns a dummy vector of ones for testing purposes.
+    return [1, 1, 1] # Example feature vector with three features (intercept, shot distance, time remaining)
+
+def B(j):
+    # This is a placeholder function that should return the global coefficients β for the given state j. 
+    # In a real implementation, these coefficients would be learned from the data during model fitting. 
+    # For now, it just returns a dummy vector of zeros for testing purposes.
+    return [0, 0, 0] # Example coefficient vector with three features (intercept, shot distance, time remaining)
+
+def bi(j):
+    # This is a placeholder function that should return the game-specific deviation bi for the given state j. 
+    # In a real implementation, this would capture how much game i deviates from the average in terms of transition probabilities. 
+    # For now, it just returns a dummy value of zero for testing purposes.
+    return 0 # Example game-specific deviation (no deviation from average)
+
+def row_mult(a, b):
+    sum = 0
+    for i in range(len(a)):
+        sum += a[i] * b[i]
+    return sum
+
+def softmax_regression(j, C, H):
+    Xi = feature_vector()
+    nijc = row_mult(Xi, B(j*C)) + bi(j*C)
+    nijh = row_mult(Xi, B(j*H)) + bi(j*H)
+
+    pjC = exp(nijc) / (1 + exp(nijc) + exp(nijh))
+    pjH = exp(nijh) / (1 + exp(nijc) + exp(nijh))
+    pjN = 1 / (1 + exp(nijc) + exp(nijh))
+
+    return pjC, pjH, pjN
+
+def process(shot_sequence, initial_distribution=[1,1,1]):
+    # This is where the main processing of the data will happen. The steps will be:
+    # 1. Fetch play-by-play data for a sample of games.
+    # 2. Extract player-level shooting sequences from the play-by-play data.
+    # 3. Fit the BLHMM to the shooting sequences to estimate transition probabilities and state distributions.
+    # 4. Analyze the fitted model to identify hot hand patterns and evaluate their statistical significance.
+    C, N, H = initial_distribution
+
+    # Transition matrix
+    pCC, pCH, pCN = softmax_regression(C, C, H)
+    pNC, pNH, pNN = softmax_regression(N, C, H)
+    pHC, pHH, pHN = softmax_regression(H, C, H)
+
+    # Note: Each row is a transition distance (I think) from the notes
+    p = [[pCC, pCN, pCH],
+        [pNC, pNN, pNH],
+        [pHC, pHN, pHH]]
+
+    for shot in shot_sequence:
+        # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
+        # This would involve calculating the likelihood of the observed shot given each possible hidden state, and then using Bayes' theorem to update our beliefs about the player's current state.
+        
+    
+    print(f"Transition matrix: {p}")
+    return
+
+
+
 # Initial Distribution
     # ∂i = (∂i(C), ∂i(N), ∂i(H)) starting with ∂i ~ Dirichlet(1, 1, 1)
     # So all states are equally likely at the start of game i. 
@@ -265,7 +331,7 @@ def get_all_player_stats_of_game(pbp_data):
     # Yin | Zin = N ~ Bernoulli(yin(N))
     # Yin | Zin = H ~ Bernoulli(yin(H))
     # yin is the success probability in state. 
-    
+
 # Shot Prob. Regression
     # logit( yi(C) ) = Xi⍺(C) + [] ⍺i(C) (?)
     # Xi = design features of observed features in game i.
@@ -319,6 +385,11 @@ def main():
         print(f"  {player}: {total_player_actions} total actions (2pt: {len(stats['two_point_sequence'])}, 3pt: {len(stats['three_point_sequence'])})")
     
     print(f"games in appended_game_stats: {len(appended_game_stats)}")
+
+    print(f"extended_game_stats[0]: {extended_game_stats[0]}")
+    test_shot_sequence = extended_game_stats[0]['Honor Huff']['three_point_sequence']
+    print(f"test_shot_sequence: {test_shot_sequence}")
+    process(test_shot_sequence)
     return
     
     for player, actions in game_stats.items():
