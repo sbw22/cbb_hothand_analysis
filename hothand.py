@@ -205,12 +205,76 @@ def get_all_player_stats_of_game(pbp_data):
     return player_stats
     # My code ends here
 
+# β
+# η
 
+# Process for BLHMM:
 
-# 
+# Initial Distribution
+    # Create initial state distribution for before any shots are taken. When I am making it, I am going 
+    # to assume an equal probability of being in each state, but later maybe I can include player stats in here.
 
+# Hidden States
+    # Zin = ∈ {C, N, H} where C = cold, N = neutral, H = hot. These states are hidden because we can't directly observe whether a player is in a hot or cold state, we can only infer it from their shooting performance.
+    # i = game index, n = shot number, Zin = hidden state during shot n of game i.
+    # Yin = Observed shot outcome, made or missed ∈ {0, 1} where 0 = made shot, 1 = missed shot.
 
+# Transition Matrix
+    # Stores probabilities for moving from state (C, H, N) to state (C, H, N). 
+    # Row = Current State, Column = Next State
+    # Looks like
 
+    #       ( p(CC) p(CN) p(CH) )
+    # L =   ( p(NC) p(NN) p(NH) )
+    #       ( p(HC) p(HN) p(HH) )
+
+    # Each row should sum to 1 because the player has to transition to some state after each shot.
+
+# Transisiton Distance
+    # Zi,n+1 | Zin ~ Categorical( pi(jC), pi(jN), pi(jH), j ∈ {C, H, N} )
+
+# Softmax Regression
+    # Used for state transision probabilities:
+        # j ∈ {C, H, N}
+    # ηi(jC) = Xi + β(jC) + bi(jC) -   ( pi(jC) = e^(ηi(jC) / 1 + e^(ηi(jH)) + e^(ηi(jH))) )
+    # ηi(jH) = Xi + β(jH) + bi(jH) -   ( pi(jH) = e^(ηi(jH) / 1 + e^(ηi(jC)) + e^(ηi(jH))) )
+    #                                  ( pi(jN) = 1 / 1 + e^(ηi(jC)) + e^(ηi(jH)) )
+
+    # Xi = Vector of features from dataset. 
+        # Ex.
+        #     [        1          ]
+        #     [   shot distance   ]
+        #     [  time remaining   ]
+        #     [     fatigue       ]
+        #     [ defender distance ]
+    # β = Global coefficients for features in X. 
+        # Same size as X.
+        # Learned probabilities by the model so that the transition probabilities match the observed
+        #  data well (as closely as possible). [ . . . ] form
+    # bi = How much a game deviates from the average. Given its game i do we know if the player will 
+    # be more streaky? If so, bi(jH) = +0.8 -> increase probability of transitioning to hot
+
+# Initial Distribution
+    # ∂i = (∂i(C), ∂i(N), ∂i(H)) starting with ∂i ~ Dirichlet(1, 1, 1)
+    # So all states are equally likely at the start of game i. 
+    # If a player is more likely to start cold, adjust to Dirichlet(5, 1, 1) for example, so cold state
+    # is higher probability.
+
+# Shot Outcome Model
+    # Yin | Zin = C ~ Bernoulli(yin(C))
+    # Yin | Zin = N ~ Bernoulli(yin(N))
+    # Yin | Zin = H ~ Bernoulli(yin(H))
+    # yin is the success probability in state. 
+    
+# Shot Prob. Regression
+    # logit( yi(C) ) = Xi⍺(C) + [] ⍺i(C) (?)
+    # Xi = design features of observed features in game i.
+    # Ex.
+    #        [  1  distance1  time1  ]
+    #  Xi =  [  1  distance2  time2  ]
+    #        [  1  distance3  time3  ]
+    # Where each row is a shot and the columns are features of the shot.
+    # ⍺(C) = fixed-effect coefficients
 
 def main():
     # Fetch the season sample, then summarize the first game as a quick smoke test.
