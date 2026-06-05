@@ -257,11 +257,11 @@ def get_all_player_stats_of_game(pbp_data):
     # be more streaky? If so, bi(jH) = +0.8 -> increase probability of transitioning to hot
 
 
-def feature_vector():
+def feature_vector(n=3):
     # This is a placeholder function that should return the feature vector Xi for a given shot. 
     # In a real implementation, this function would extract relevant features from the dataset, such as shot distance, time remaining, fatigue level, defender distance, etc.
     # For now, it just returns a dummy vector of ones for testing purposes.
-    return [1, 1, 1] # Example feature vector with three features (intercept, shot distance, time remaining)
+    return [1 for _ in range(n)] # Example feature vector with three features (intercept, shot distance, time remaining)
 
 def B(j):
     # This is a placeholder function that should return the global coefficients β for the given state j. 
@@ -275,30 +275,43 @@ def bi(j):
     # For now, it just returns a dummy value of zero for testing purposes.
     return 0 # Example game-specific deviation (no deviation from average)
 
-def row_mult(a, b):
+def dot_product(a, b):
     sum = 0
     for i in range(len(a)):
         sum += a[i] * b[i]
     return sum
 
-def softmax_regression(j, C, H):
-    Xi = feature_vector()
-    nijc = row_mult(Xi, B(j*C)) + bi(j*C)
-    nijh = row_mult(Xi, B(j*H)) + bi(j*H)
+def calculate_posterior(prior, likelihood):
+    pass
 
-    pjC = exp(nijc) / (1 + exp(nijc) + exp(nijh))
-    pjH = exp(nijh) / (1 + exp(nijc) + exp(nijh))
-    pjN = 1 / (1 + exp(nijc) + exp(nijh))
+def softmax_regression(j, C, H): 
+    Xi = feature_vector()
+    ni_jc = dot_product(Xi, B(j*C)) + bi(j*C)
+    ni_jh = dot_product(Xi, B(j*H)) + bi(j*H)
+    denom = 1 + exp(ni_jc) + exp(ni_jh)
+
+    pjC = exp(ni_jc) / denom # a logit function
+    pjH = exp(ni_jh) / denom
+    pjN = 1 / denom
 
     return pjC, pjH, pjN
 
-def process(shot_sequence, initial_distribution=[1,1,1]):
+def process(shot_sequence, initial_distribution=[0.33, 0.33, 0.33], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
     # This is where the main processing of the data will happen. The steps will be:
     # 1. Fetch play-by-play data for a sample of games.
     # 2. Extract player-level shooting sequences from the play-by-play data.
     # 3. Fit the BLHMM to the shooting sequences to estimate transition probabilities and state distributions.
     # 4. Analyze the fitted model to identify hot hand patterns and evaluate their statistical significance.
+
+    # posterior ∝ likelihood × prior
+
+    # P(state | shot outcome) ∝ P(shot outcome | state) × P(state)
+
+    # gamma_J = Probability of making a shot in state J, where J ∈ {C, N, H}. These are the likelihoods P(shot outcome | state) for each state.
+    gammas = [gamma_C, gamma_N, gamma_H]
+
     C, N, H = initial_distribution
+    belief = initial_distribution
 
     # Transition matrix
     pCC, pCH, pCN = softmax_regression(C, C, H)
@@ -313,10 +326,41 @@ def process(shot_sequence, initial_distribution=[1,1,1]):
     for shot in shot_sequence:
         # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
         # This would involve calculating the likelihood of the observed shot given each possible hidden state, and then using Bayes' theorem to update our beliefs about the player's current state.
-        
+        made = (shot == 0) # Assuming shot_sequence is a list of 0s and 1s where 0 = made shot, 1 = missed shot
+        pred = [0, 0, 0]
+
+        for next_s in range(3):
+            for curr_s in range(3):
+                pred[next_s] += belief[curr_s] * p[curr_s][next_s]
     
-    print(f"Transition matrix: {p}")
+        updated = [0, 0, 0]
+        for s in range(3):
+            likelihood = gammas[s] if made else (1 - gammas[s])
+            updated[s] = likelihood * pred[s]
+        
+        total = sum(updated)
+        belief = [u / total for u in updated]
+
+        print(f"Shot: {'make' if made else 'miss'} | P(C)={belief[0]:.3f}  P(N)={belief[1]:.3f}  P(H)={belief[2]:.3f}")
+
+
+
+    
+    print(f"\n\nTransition matrix: {p}")
     return
+
+
+def shot_outcome_model(j):
+    Yin = Bernoulli(yin(j))
+    return Yin
+
+def shot_probability_regression(n):
+    # This function would implement the regression model for the shot success probabilities in each state. 
+    # It would take the design features of the shots (e.g., distance, time remaining) and the state-specific coefficients to calculate the probability of making a shot in each state.
+    Xi = [feature_vector() for _ in range(len(shot_sequence))] # This is a placeholder for the actual design matrix of shot features.
+    logit_yiC = dot_product(Xi, B(C)) + bi(C)
+    logit_yiH = dot_product(Xi, B(H)) + bi(H)
+
 
 
 
@@ -333,7 +377,7 @@ def process(shot_sequence, initial_distribution=[1,1,1]):
     # yin is the success probability in state. 
 
 # Shot Prob. Regression
-    # logit( yi(C) ) = Xi⍺(C) + [] ⍺i(C) (?)
+    # logit( yi(C) ) = Xi⍺(C) + Ξi ai(C) (?)
     # Xi = design features of observed features in game i.
     # Ex.
     #        [  1  distance1  time1  ]
