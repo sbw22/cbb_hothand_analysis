@@ -144,13 +144,16 @@ def get_all_player_stats_of_game(pbp_data):
     for period in pbp_data['periods']:
 
         # My code starts here
-
+        counter = 0
         for play in period['playbyplayStats']:
             # print(f"")
+            
             if skip_counter:
                 skip_counter = False
                 continue
+    
             play_list = play['eventDescription'].split()
+            clock_time = play['clock']
 
             # Sometimes, the player's last name is concatenated with 'makes' or 'misses' in the event description, 
             # so we need to split those apart to get the player's name and the shot result as separate tokens.
@@ -178,9 +181,11 @@ def get_all_player_stats_of_game(pbp_data):
 
             # if play_list[0] == "Milan":
             #     print(f"Found a shot event for Milan Momcilovic: {play['clock']}\n")
-
+            '''if counter == 10:
+                print(f"play: {play}")
+                wefds'''
             if player_name not in player_stats:
-                player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': []} # 0 = make, 1 = miss
+                player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence': []} # 0 = make, 1 = miss
 
             
             # Record whether the shot was a make or miss (0 or 1) in the appropriate sequence list for the player. This is a simple way to 
@@ -199,10 +204,11 @@ def get_all_player_stats_of_game(pbp_data):
                 player_stats[player_name]['two_point_sequence'].append(1)
             else:
                 continue
+            player_stats[player_name]['clock_time_sequence'].append(clock_time)
 
             skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
             # which should prevent us from processing the duplicate event in the play-by-play data.
-        
+            counter += 1
 
     return player_stats
     # My code ends here
