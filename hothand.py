@@ -326,6 +326,7 @@ def process(shot_sequence, initial_distribution=[0.7, 0.2, 0.1], gamma_C=0.2, ga
     # P(state | shot outcome) ∝ P(shot outcome | state) × P(state)
 
     # gamma_J = Probability of making a shot in state J, where J ∈ {C, N, H}. These are the likelihoods P(shot outcome | state) for each state.
+    #implement 
     gammas = [gamma_C, gamma_N, gamma_H]
 
     C, N, H = initial_distribution
