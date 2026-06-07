@@ -304,6 +304,7 @@ def calculate_posterior(prior, likelihood):
 
 def softmax_regression(j, C, H): 
     Xi = feature_vector()
+    #this is causing the transition rows to be identical
     ni_jc = dot_product(Xi, B(j*C)) + bi(j*C)
     ni_jh = dot_product(Xi, B(j*H)) + bi(j*H)
     denom = 1 + exp(ni_jc) + exp(ni_jh)
