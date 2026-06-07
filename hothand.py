@@ -154,6 +154,7 @@ def get_all_player_stats_of_game(pbp_data):
     
             play_list = play['eventDescription'].split()
             clock_time = play['clock']
+            
 
             # Sometimes, the player's last name is concatenated with 'makes' or 'misses' in the event description, 
             # so we need to split those apart to get the player's name and the shot result as separate tokens.
@@ -205,7 +206,7 @@ def get_all_player_stats_of_game(pbp_data):
             else:
                 continue
             player_stats[player_name]['clock_time_sequence'].append(clock_time)
-
+            
             skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
             # which should prevent us from processing the duplicate event in the play-by-play data.
             counter += 1
@@ -256,6 +257,8 @@ def get_all_player_stats_of_game(pbp_data):
         #     [  time remaining   ]
         #     [     fatigue       ]
         #     [ defender distance ]
+        
+
     # β = Global coefficients for features in X. 
         # Same size as X.
         # Learned probabilities by the model so that the transition probabilities match the observed
@@ -268,6 +271,14 @@ def feature_vector(n=1):
     # This is a placeholder function that should return the feature vector Xi for a given shot. 
     # In a real implementation, this function would extract relevant features from the dataset, such as shot distance, time remaining, fatigue level, defender distance, etc.
     # For now, it just returns a dummy vector of ones for testing purposes.
+    
+    #What we are currently using
+    #     [       Current Score       ]
+    #     [       Time Left       ]
+    #     [       Time Between Shots        ]
+    #     [       Home/Away        ]
+    
+    
     return [1 for _ in range(n)] # Example feature vector with three features (intercept, shot distance, time remaining)
 
 def B(j):
@@ -340,16 +351,18 @@ def process(shot_sequence, initial_distribution=[0.7, 0.2, 0.1], gamma_C=0.2, ga
         # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
         # This would involve calculating the likelihood of the observed shot given each possible hidden state, and then using Bayes' theorem to update our beliefs about the player's current state.
         made = (shot == 0) # Assuming shot_sequence is a list of 0s and 1s where 0 = made shot, 1 = missed shot
-        pred = [0, 0, 0] # The prior
+        
+        #change in the future to get player by player priors
+        prior = [0, 0, 0] # The prior
 
         for next_s in range(3):
             for curr_s in range(3):
-                pred[next_s] += belief[curr_s] * p[curr_s][next_s]
+                prior[next_s] += belief[curr_s] * p[curr_s][next_s]
     
         updated = [0, 0, 0]
         for s in range(3):
             likelihood = gammas[s] if made else (1 - gammas[s])
-            updated[s] = likelihood * pred[s]
+            updated[s] = likelihood * prior[s]
         
         total = sum(updated)
         belief = [u / total for u in updated]
