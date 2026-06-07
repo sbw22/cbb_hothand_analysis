@@ -2,6 +2,7 @@ import http.client
 import json
 from datetime import datetime, timedelta
 from math import exp
+import numpy as np
 
 
 # Centralize the API host and season boundaries so the rest of the script can
@@ -257,7 +258,7 @@ def get_all_player_stats_of_game(pbp_data):
     # be more streaky? If so, bi(jH) = +0.8 -> increase probability of transitioning to hot
 
 
-def feature_vector(n=3):
+def feature_vector(n=1):
     # This is a placeholder function that should return the feature vector Xi for a given shot. 
     # In a real implementation, this function would extract relevant features from the dataset, such as shot distance, time remaining, fatigue level, defender distance, etc.
     # For now, it just returns a dummy vector of ones for testing purposes.
@@ -267,7 +268,7 @@ def B(j):
     # This is a placeholder function that should return the global coefficients β for the given state j. 
     # In a real implementation, these coefficients would be learned from the data during model fitting. 
     # For now, it just returns a dummy vector of zeros for testing purposes.
-    return [0, 0, 0] # Example coefficient vector with three features (intercept, shot distance, time remaining)
+    return [1] # Example coefficient vector with one feature (intercept, shot distance, time remaining)
 
 def bi(j):
     # This is a placeholder function that should return the game-specific deviation bi for the given state j. 
@@ -296,7 +297,7 @@ def softmax_regression(j, C, H):
 
     return pjC, pjH, pjN
 
-def process(shot_sequence, initial_distribution=[0.33, 0.33, 0.33], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
+def process(shot_sequence, initial_distribution=[0.7, 0.2, 0.1], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
     # This is where the main processing of the data will happen. The steps will be:
     # 1. Fetch play-by-play data for a sample of games.
     # 2. Extract player-level shooting sequences from the play-by-play data.
@@ -319,15 +320,21 @@ def process(shot_sequence, initial_distribution=[0.33, 0.33, 0.33], gamma_C=0.2,
     pHC, pHH, pHN = softmax_regression(H, C, H)
 
     # Note: Each row is a transition distance (I think) from the notes
-    p = [[pCC, pCN, pCH],
-        [pNC, pNN, pNH],
-        [pHC, pHN, pHH]]
+    #    -> C  -> N  -> H
+    p = [[pCC, pCN, pCH], # C
+        [pNC, pNN, pNH],  # N
+        [pHC, pHN, pHH]]  # H
+    '''p = [
+        [0.6, 0.3, 0.1],  # from Cold:    likely to stay cold
+        [0.2, 0.6, 0.2],  # from Neutral: likely to stay neutral
+        [0.1, 0.3, 0.6],  # from Hot:     likely to stay hot
+    ]'''
 
     for shot in shot_sequence:
         # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
         # This would involve calculating the likelihood of the observed shot given each possible hidden state, and then using Bayes' theorem to update our beliefs about the player's current state.
         made = (shot == 0) # Assuming shot_sequence is a list of 0s and 1s where 0 = made shot, 1 = missed shot
-        pred = [0, 0, 0]
+        pred = [0, 0, 0] # The prior
 
         for next_s in range(3):
             for curr_s in range(3):
@@ -343,16 +350,29 @@ def process(shot_sequence, initial_distribution=[0.33, 0.33, 0.33], gamma_C=0.2,
 
         print(f"Shot: {'make' if made else 'miss'} | P(C)={belief[0]:.3f}  P(N)={belief[1]:.3f}  P(H)={belief[2]:.3f}")
 
-
-
     
-    print(f"\n\nTransition matrix: {p}")
+    print(f"\n\nTransition matrix:")
+    for row in p:
+        print(f"{row}")
+
+    t_step_transition_probabilities(p, 4)
     return
 
+def t_step_transition_probabilities(p, t=1):
+    np_p = np.array(p)
+    p_t = np.linalg.matrix_power(np_p, t)
+    p_t = list(p_t)
+    print(f"Transition probabilities in {t} step(s)")
+    for row in p_t:
+        print(f"{row}")
 
-def shot_outcome_model(j):
-    Yin = Bernoulli(yin(j))
-    return Yin
+    '''pi_t = [[0,0,0],[0,0,0],[0,0,0]]
+    for next_s in range(3):
+        for curr_s in range(3):'''
+    
+
+
+
 
 def shot_probability_regression(n):
     # This function would implement the regression model for the shot success probabilities in each state. 
@@ -430,8 +450,8 @@ def main():
     
     print(f"games in appended_game_stats: {len(appended_game_stats)}")
 
-    print(f"extended_game_stats[0]: {extended_game_stats[0]}")
-    test_shot_sequence = extended_game_stats[0]['Honor Huff']['three_point_sequence']
+    print(f"extended_game_stats[0]: {extended_game_stats[5]}")
+    test_shot_sequence = extended_game_stats[5]['Milan Momcilovic']['three_point_sequence']
     print(f"test_shot_sequence: {test_shot_sequence}")
     process(test_shot_sequence)
     return
