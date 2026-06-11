@@ -293,8 +293,8 @@ def feature_vector(n=1):
 def B(j, len):
     # This is a placeholder function that should return the global coefficients β for the given state j. 
     # In a real implementation, these coefficients would be learned from the data during model fitting. 
-    # For now, it just returns a dummy vector of zeros for testing purposes.
-    return [1 for _ in range(len)] # Example coefficient vector with one feature (intercept, shot distance, time remaining)
+    # For now, it just returns a dummy vector of ones for testing purposes.
+    return [j for _ in range(len)] # Example coefficient vector with one feature (intercept, shot distance, time remaining) (?)
 
 def bi(j):
     # This is a placeholder function that should return the game-specific deviation bi for the given state j. 
@@ -338,6 +338,7 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
     # P(state | shot outcome) ∝ P(shot outcome | state) × P(state)
 
     # gamma_J = Probability of making a shot in state J, where J ∈ {C, N, H}. These are the likelihoods P(shot outcome | state) for each state.
+    #implement 
     gammas = [gamma_C, gamma_N, gamma_H]
 
     C, N, H = initial_distribution
