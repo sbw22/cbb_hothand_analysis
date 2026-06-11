@@ -294,7 +294,7 @@ def B(j, len):
     # This is a placeholder function that should return the global coefficients β for the given state j. 
     # In a real implementation, these coefficients would be learned from the data during model fitting. 
     # For now, it just returns a dummy vector of ones for testing purposes.
-    return [j for _ in range(len)] # Example coefficient vector with one feature (intercept, shot distance, time remaining) (?)
+    return [1 for _ in range(len)] # Example coefficient vector with one feature (intercept, shot distance, time remaining) (?)
 
 def bi(j):
     # This is a placeholder function that should return the game-specific deviation bi for the given state j. 
