@@ -151,11 +151,14 @@ def get_all_player_stats_of_game(pbp_data):
             if skip_counter:
                 skip_counter = False
                 continue
-    
-            play_list = play['eventDescription'].split()
-            clock_time = play['clock']
-            
 
+            play_list = play['eventDescription'].split()
+            is_home_bool = bool(play['isHome'])
+            is_home = 0 if is_home_bool else 1 # 0 if at home, 1 if away
+            # clock_time_str = play['clock']
+            clock_time_list = play['clock'].split(":")
+            clock_time = (int(clock_time_list[0]) * 60) + int(clock_time_list[1]) # The total amount of seconds left on the clock
+            clock_time /= 1200 # Normalizing the clock value to be between 0 and 1
             # Sometimes, the player's last name is concatenated with 'makes' or 'misses' in the event description, 
             # so we need to split those apart to get the player's name and the shot result as separate tokens.
             if play_list[1][-6:] == "misses":
@@ -180,13 +183,11 @@ def get_all_player_stats_of_game(pbp_data):
             if player_name in ["TV timeout", "Subbing out", "Subbing in", "End of", "Team defensive", "Team offensive"]:
                 continue
 
-            # if play_list[0] == "Milan":
-            #     print(f"Found a shot event for Milan Momcilovic: {play['clock']}\n")
             '''if counter == 10:
                 print(f"play: {play}")
                 wefds'''
             if player_name not in player_stats:
-                player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence': []} # 0 = make, 1 = miss
+                player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence_two_point': [], 'clock_time_sequence_three_point': [], 'is_home_sequence_two_point': [], 'is_home_sequence_three_point': []} # 0 = make, 1 = miss
 
             
             # Record whether the shot was a make or miss (0 or 1) in the appropriate sequence list for the player. This is a simple way to 
@@ -194,18 +195,26 @@ def get_all_player_stats_of_game(pbp_data):
             if 'makes' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
                 # print(f"Found a made 3pt shot: {play}")
                 player_stats[player_name]['three_point_sequence'].append(0)
+                player_stats[player_name]['clock_time_sequence_three_point'].append(clock_time)
+                player_stats[player_name]['is_home_sequence_three_point'].append(is_home)
             elif 'misses' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
                 # print(f"Found a missed 3pt shot: {play}")
                 player_stats[player_name]['three_point_sequence'].append(1)
+                player_stats[player_name]['clock_time_sequence_three_point'].append(clock_time)
+                player_stats[player_name]['is_home_sequence_three_point'].append(is_home)
             elif 'makes' in play_list and 'two' in play_list and 'point' in play_list and 'jump' in play_list and 'shot' in play_list:
                 # print(f"Found a made 2pt shot: {play}")
                 player_stats[player_name]['two_point_sequence'].append(0)
+                player_stats[player_name]['clock_time_sequence_two_point'].append(clock_time)
+                player_stats[player_name]['is_home_sequence_two_point'].append(is_home)
             elif 'misses' in play_list and 'two' in play_list and 'point' in play_list and 'jump' in play_list and 'shot' in play_list:
                 # print(f"Found a missed 2pt shot: {play}")
                 player_stats[player_name]['two_point_sequence'].append(1)
+                player_stats[player_name]['clock_time_sequence_two_point'].append(clock_time)
+                player_stats[player_name]['is_home_sequence_two_point'].append(is_home)
             else:
                 continue
-            player_stats[player_name]['clock_time_sequence'].append(clock_time)
+            
             
             skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
             # which should prevent us from processing the duplicate event in the play-by-play data.
@@ -281,11 +290,11 @@ def feature_vector(n=1):
     
     return [1 for _ in range(n)] # Example feature vector with three features (intercept, shot distance, time remaining)
 
-def B(j):
+def B(j, len):
     # This is a placeholder function that should return the global coefficients β for the given state j. 
     # In a real implementation, these coefficients would be learned from the data during model fitting. 
     # For now, it just returns a dummy vector of zeros for testing purposes.
-    return [1] # Example coefficient vector with one feature (intercept, shot distance, time remaining)
+    return [1 for _ in range(len)] # Example coefficient vector with one feature (intercept, shot distance, time remaining)
 
 def bi(j):
     # This is a placeholder function that should return the game-specific deviation bi for the given state j. 
@@ -302,10 +311,13 @@ def dot_product(a, b):
 def calculate_posterior(prior, likelihood):
     pass
 
-def softmax_regression(j, C, H): 
-    Xi = feature_vector()
-    ni_jc = dot_product(Xi, B(j*C)) + bi(j*C)
-    ni_jh = dot_product(Xi, B(j*H)) + bi(j*H)
+def softmax_regression(j, C, H, Xi_n): 
+    # print(f"Xi_n = {Xi_n}")
+    # Xi = feature_vector()
+    ni_jc = dot_product(Xi_n, B(j*C, len(Xi_n))) + bi(j*C)
+    ni_jh = dot_product(Xi_n, B(j*H, len(Xi_n))) + bi(j*H)
+    # print(f"Xi_n = {Xi_n}, B(j*C, len(Xi_n)) = {B(j*C, len(Xi_n))}, B(j*H, len(Xi_n)) = {B(j*H, len(Xi_n))}")
+    # print(f"ni_jc={ni_jc}, ni_jh={ni_jh}, j = {j}")
     denom = 1 + exp(ni_jc) + exp(ni_jh)
 
     pjC = exp(ni_jc) / denom # a logit function
@@ -314,7 +326,7 @@ def softmax_regression(j, C, H):
 
     return pjC, pjH, pjN
 
-def process(shot_sequence, initial_distribution=[0.7, 0.2, 0.1], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
+def process(shot_sequence, clock_sequence, is_home_sequence, initial_distribution=[0.5, 0.33, 0.33], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
     # This is where the main processing of the data will happen. The steps will be:
     # 1. Fetch play-by-play data for a sample of games.
     # 2. Extract player-level shooting sequences from the play-by-play data.
@@ -330,30 +342,45 @@ def process(shot_sequence, initial_distribution=[0.7, 0.2, 0.1], gamma_C=0.2, ga
 
     C, N, H = initial_distribution
     belief = initial_distribution
-
-    # Transition matrix
-    pCC, pCH, pCN = softmax_regression(C, C, H)
-    pNC, pNH, pNN = softmax_regression(N, C, H)
-    pHC, pHH, pHN = softmax_regression(H, C, H)
+    Xi = [clock_sequence, is_home_sequence]
+    # print(f"clock_sequence len = {len(clock_sequence)}, shot_sequence len = {len(shot_sequence)}, is_home_sequence len = {len(is_home_sequence)}")
+    '''# Transition matrix
+    pCC, pCH, pCN = softmax_regression(C, C, H, Xi)
+    pNC, pNH, pNN = softmax_regression(N, C, H, Xi)
+    pHC, pHH, pHN = softmax_regression(H, C, H, Xi)
 
     # Note: Each row is a transition distance (I think) from the notes
     #    -> C  -> N  -> H
     p = [[pCC, pCN, pCH], # C
         [pNC, pNN, pNH],  # N
-        [pHC, pHN, pHH]]  # H
+        [pHC, pHN, pHH]]  # H'''
     '''p = [
         [0.6, 0.3, 0.1],  # from Cold:    likely to stay cold
         [0.2, 0.6, 0.2],  # from Neutral: likely to stay neutral
         [0.1, 0.3, 0.6],  # from Hot:     likely to stay hot
     ]'''
 
-    for shot in shot_sequence:
+    for i, shot in enumerate(shot_sequence):
         # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
         # This would involve calculating the likelihood of the observed shot given each possible hidden state, and then using Bayes' theorem to update our beliefs about the player's current state.
         made = (shot == 0) # Assuming shot_sequence is a list of 0s and 1s where 0 = made shot, 1 = missed shot
-        
+        # Xi = [feature[i] for feature in X]
         #change in the future to get player by player priors
         prior = [0, 0, 0] # The prior
+        Xi_n = [stat_list[i] for stat_list in Xi]
+        C, N, H = belief
+        pCC, pCH, pCN = softmax_regression(C, C, H, Xi_n)
+        pNC, pNH, pNN = softmax_regression(N, C, H, Xi_n)
+        pHC, pHH, pHN = softmax_regression(H, C, H, Xi_n)
+        # print(f"")
+
+        # Note: Each row is a transition distance (I think) from the notes
+        #    -> C  -> N  -> H
+        p = [[pCC, pCN, pCH], # C
+            [pNC, pNN, pNH],  # N
+            [pHC, pHN, pHH]]  # H
+        
+        # print(f"Transition matrix on shot {i}: {p}")
 
         for next_s in range(3):
             for curr_s in range(3):
@@ -470,9 +497,13 @@ def main():
     print(f"games in appended_game_stats: {len(appended_game_stats)}")
 
     print(f"extended_game_stats[0]: {extended_game_stats[5]}")
-    test_shot_sequence = extended_game_stats[5]['Milan Momcilovic']['three_point_sequence']
+    test_player = extended_game_stats[5]['Milan Momcilovic']
+    test_shot_sequence = test_player['three_point_sequence']
+    test_clock_sequence = test_player['clock_time_sequence_three_point']
+    test_is_home_sequence = test_player['is_home_sequence_three_point']
+
     print(f"test_shot_sequence: {test_shot_sequence}")
-    process(test_shot_sequence)
+    process(test_shot_sequence, test_clock_sequence, test_is_home_sequence)
     return
     
     for player, actions in game_stats.items():
