@@ -276,7 +276,7 @@ def get_all_player_stats_of_game(pbp_data):
     # be more streaky? If so, bi(jH) = +0.8 -> increase probability of transitioning to hot
 
 
-def feature_vector(n=1):
+# def feature_vector(n=1):
     # This is a placeholder function that should return the feature vector Xi for a given shot. 
     # In a real implementation, this function would extract relevant features from the dataset, such as shot distance, time remaining, fatigue level, defender distance, etc.
     # For now, it just returns a dummy vector of ones for testing purposes.
@@ -360,6 +360,10 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
         [0.2, 0.6, 0.2],  # from Neutral: likely to stay neutral
         [0.1, 0.3, 0.6],  # from Hot:     likely to stay hot
     ]'''
+    # Initialize p
+    p = [[0, 0, 0], # C
+        [0, 0, 0], # N
+        [0, 0, 0]] # H
 
     for i, shot in enumerate(shot_sequence):
         # Here we would update the state distribution based on the observed shot outcome and the transition probabilities. 
@@ -395,7 +399,7 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
         total = sum(updated)
         belief = [u / total for u in updated]
 
-        print(f"Shot: {'make' if made else 'miss'} | P(C)={belief[0]:.3f}  P(N)={belief[1]:.3f}  P(H)={belief[2]:.3f}")
+        print(f"Shot: {'make' if made else 'miss'} | P(C)={belief[0]:.3f}  P(N)={belief[1]:.3f}  P(H)={belief[2]:.3f} | {'make' if made else 'miss'}")
 
     
     print(f"\n\nTransition matrix:")
@@ -403,6 +407,7 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
         print(f"{row}")
 
     t_step_transition_probabilities(p, 4)
+    occupancy_times(p, n=len(shot_sequence) - 1, initial_state=0)  # starting from Cold - 0 = cold, 1 = neutral, 2 = hot
     return
 
 def t_step_transition_probabilities(p, t=1):
@@ -416,9 +421,72 @@ def t_step_transition_probabilities(p, t=1):
     '''pi_t = [[0,0,0],[0,0,0],[0,0,0]]
     for next_s in range(3):
         for curr_s in range(3):'''
+
+
+def occupancy_times(p, n, initial_state=None):  # LOOK OVER THIS FUNCTION CAREFULLY, CLAUDE GENERATED IT AND I WANT TO MAKE SURE IT IS CORRECT AND UNDERSTAND IT DEEPLY
+    """
+    Compute the occupancy time matrix for an n-shot sequence given a fixed
+    transition matrix p.
+
+    In the paper (Section 3.3, Eq. 9), the occupancy time m_i^(jk)(n) is the
+    expected number of visits to state k starting from state j in the first
+    n transitions of the chain.
+
+    For 2 states, the paper uses a closed-form expression derived from the
+    eigenvalues of the 2x2 transition matrix:
+
+        M(n) = ((n+1)/(p_CH+p_HC)) * [[p_HC, p_CH],[p_HC, p_CH]]
+             + (1-(p_HC+p_CH-1)^(n+1))/(p_CH+p_HC)^2 * [[p_CH,-p_CH],[-p_HC,p_HC]]
+
+    For 3 states {C=0, N=1, H=2}, the equivalent general result is the matrix
+    geometric series:
+
+        M(n) = I + P + P^2 + ... + P^n  =  sum_{t=0}^{n} P^t
+
+    where M[j][k] is the expected number of visits to state k when starting
+    from state j, over n transitions (i.e. n+1 shots including the starting one).
+
+    This collapses to the paper's 2-state closed form when applied to a 2x2
+    matrix, and generalizes naturally to any number of states.
+
+    Args:
+        p:             3x3 transition matrix as a list of lists (rows sum to 1)
+                       p[j][k] = P(next state = k | current state = j)
+        n:             number of transitions (shots after the first)
+        initial_state: optional int (0=C, 1=N, 2=H). If provided, returns a
+                       1D array of expected visits to each state from that
+                       starting state. If None, returns the full 3x3 matrix.
+
+    Returns:
+        If initial_state is None: 3x3 numpy array M where M[j][k] = expected
+            visits to state k starting from state j in n transitions.
+        If initial_state is int: 1D numpy array of length 3, the j-th row of M.
+    """
+    np_p = np.array(p)
+    M = np.zeros((3, 3))
+
+    # Sum P^t for t = 0, 1, ..., n
+    # P^0 = I (the starting state counts as visit 1)
+    P_power = np.eye(3)
+    for t in range(n + 1):
+        M += P_power
+        P_power = P_power @ np_p
+
+    state_names = ['C', 'N', 'H']
+    print(f"\nOccupancy time matrix over {n} transitions ({n+1} shots):")
+    print(f"  {'':6} {'->C':>8} {'->N':>8} {'->H':>8}")
+    for j in range(3):
+        row_str = "  ".join(f"{M[j][k]:8.3f}" for k in range(3))
+        print(f"  {state_names[j]}: {row_str}  (sums to {M[j].sum():.3f}, should be {n+1})")
+
+    if initial_state is not None:
+        print(f"\nStarting from state {state_names[initial_state]}:")
+        for k in range(3):
+            print(f"  Expected visits to {state_names[k]}: {M[initial_state][k]:.3f}")
+        return M[initial_state]
+
+    return M
     
-
-
 
 
 def shot_probability_regression(n):
