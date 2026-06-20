@@ -406,11 +406,12 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
     for row in p:
         print(f"{row}")
 
-    t_step_transition_probabilities(p, 4)
+    t_step_transition_probabilities(p, 10)
     occupancy_times(p, n=len(shot_sequence) - 1, initial_state=0)  # starting from Cold - 0 = cold, 1 = neutral, 2 = hot
+    sojourn_times(p, t=1)
     return
 
-def t_step_transition_probabilities(p, t=1):
+def t_step_transition_probabilities(p, t=2):
     np_p = np.array(p)
     p_t = np.linalg.matrix_power(np_p, t)
     p_t = list(p_t)
@@ -421,6 +422,20 @@ def t_step_transition_probabilities(p, t=1):
     '''pi_t = [[0,0,0],[0,0,0],[0,0,0]]
     for next_s in range(3):
         for curr_s in range(3):'''
+
+def sojourn_times(p, t=1):
+    # The sojourn time in state j is the expected number of consecutive shots a player will take in state j before transitioning to a different state. 
+    # For a Markov chain, the sojourn time in state j can be calculated as 1 / (1 - p(jj)), where p(jj) is the probability of staying in state j.
+    sojourn_times = [0, 0, 0]
+    for j in range(3):
+        sojourn_times[j] = (p[j][j]**t) * (1 - p[j][j])
+    
+    print(f"\nSojourn times for each state for {t} step(s):")
+    print(f"  Cold: {sojourn_times[0]:.3f} shots")
+    print(f"  Neutral: {sojourn_times[1]:.3f} shots")
+    print(f"  Hot: {sojourn_times[2]:.3f} shots")
+
+    return sojourn_times
 
 
 def occupancy_times(p, n, initial_state=None):  # LOOK OVER THIS FUNCTION CAREFULLY, CLAUDE GENERATED IT AND I WANT TO MAKE SURE IT IS CORRECT AND UNDERSTAND IT DEEPLY
@@ -464,9 +479,10 @@ def occupancy_times(p, n, initial_state=None):  # LOOK OVER THIS FUNCTION CAREFU
     """
     np_p = np.array(p)
     M = np.zeros((3, 3))
-
+    # @ = matrix multiplication operator in numpy
     # Sum P^t for t = 0, 1, ..., n
     # P^0 = I (the starting state counts as visit 1)
+    # np.eye = identity matrix of size 3x3
     P_power = np.eye(3)
     for t in range(n + 1):
         M += P_power
