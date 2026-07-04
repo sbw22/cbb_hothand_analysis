@@ -8,6 +8,17 @@ from fetch_ncaa_data import NCAADataFetcher
 # β
 # η
 
+NUM_FEATURES = 2  # must match len(Xi_n)
+
+beta = {
+    'CH': np.zeros(NUM_FEATURES),   # Cold  → Hot
+    'HC': np.zeros(NUM_FEATURES),   # Hot   → Cold
+    'CN': np.zeros(NUM_FEATURES),   # Cold  → Neutral
+    'NC': np.zeros(NUM_FEATURES),   # Neutral → Cold
+    'NH': np.zeros(NUM_FEATURES),   # Neutral → Hot
+    'HN': np.zeros(NUM_FEATURES),   # Hot   → Neutral
+}
+
 # Process for BLHMM:
 
 # Initial Distribution
@@ -90,25 +101,73 @@ def dot_product(a, b):
         sum += a[i] * b[i]
     return sum
 
-def calculate_posterior(prior, likelihood):
-    pass
+def get_beta(transition: str) -> np.ndarray:
+    # Return a global coefficient vector β for a givin transition pair
+    return beta[transition]
 
-def softmax_regression(j, C, H, Xi_n): 
+def get_random_game_effects(game_id: int, transition: str, sigma: float = 0.0) -> float:
+    '''
+    return the game-level random effect for a transition
+    
+    game_id: index i of the game
+    transition: One of the 6 possible transition pairs: 'CH', 'HC', 'CN', 'NC', 'NH', 'HN'
+    sigma: std dev of the random effect distribution N(0, sigma^2)
+           Set to 0 for the deterministic/fixed baseline.
+           Set > 0 (e.g., 0.5) to simulate game to game variability.
+    
+    In a real fit you'd store these per game and update them using MCMC.
+    '''
+    if sigma == 0.0:
+        return 0.0
+    
+    # Seed by game_id + transition so its reproducible per game
+    rng = np.random.default_rng(seed=hash((game_id, transition)) % (2**32))
+    return float(rng.normal(0, sigma))
+
+def softmax_regression(current_state: str, Xi_n: list, game_id: int = 0) -> tuple: 
     # print(f"Xi_n = {Xi_n}")
-    # Xi = feature_vector()
-    ni_jc = dot_product(Xi_n, B(j*C, len(Xi_n))) + bi(j*C)
-    ni_jh = dot_product(Xi_n, B(j*H, len(Xi_n))) + bi(j*H)
+    Xi = np.array(Xi_n)
+
+    if current_state == 'C':
+        eta_H = np.dot(Xi, get_beta('CH')) + get_random_game_effects(game_id, 'CH')
+        eta_N = np.dot(Xi, get_beta('CN')) + get_random_game_effects(game_id, 'CN')
+    elif current_state == 'H':
+        eta_C = np.dot(Xi, get_beta('HC')) + get_random_game_effects(game_id, 'HC')
+        eta_N = np.dot(Xi, get_beta('HN')) + get_random_game_effects(game_id, 'HN')
+    elif current_state == 'N':
+        eta_C = np.dot(Xi, get_beta('NC')) + get_random_game_effects(game_id, 'NC')
+        eta_H = np.dot(Xi, get_beta('NH')) + get_random_game_effects(game_id, 'NH')
+        # Rename for the general softmax below
+        eta_N = 0.0  # baseline (stay in N is reference category)
+    
+    # Softmax with one state as reference (η = 0 means "average tendency")
+    # From C: reference = stay Cold
+    # From N: reference = stay Neutral  
+    # From H: reference = stay Hot
+    if current_state == 'C':
+        denom = 1 + exp(eta_H) + exp(eta_N)
+        return 1/denom, exp(eta_N)/denom, exp(eta_H)/denom   # (p_C, p_N, p_H)
+    elif current_state == 'N':
+        denom = 1 + exp(eta_H) + exp(eta_C)
+        return exp(eta_C)/denom, 1/denom, exp(eta_H)/denom
+    elif current_state == 'H':
+        denom = 1 + exp(eta_C) + exp(eta_N)
+        return exp(eta_C)/denom, exp(eta_N)/denom, 1/denom
+
+    
+
+
     # print(f"Xi_n = {Xi_n}, B(j*C, len(Xi_n)) = {B(j*C, len(Xi_n))}, B(j*H, len(Xi_n)) = {B(j*H, len(Xi_n))}")
     # print(f"ni_jc={ni_jc}, ni_jh={ni_jh}, j = {j}")
-    denom = 1 + exp(ni_jc) + exp(ni_jh)
+    '''denom = 1 + exp(ni_jc) + exp(ni_jh)
 
     pjC = exp(ni_jc) / denom # a logit function
     pjH = exp(ni_jh) / denom
     pjN = 1 / denom
 
-    return pjC, pjH, pjN
+    return pjC, pjH, pjN'''
 
-def process(shot_sequence, clock_sequence, is_home_sequence, initial_distribution=[0.5, 0.33, 0.33], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
+def process(shot_sequence, clock_sequence, is_home_sequence, initial_distribution=[0.33, 0.33, 0.33], gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
     # This is where the main processing of the data will happen. The steps will be:
     # 1. Fetch play-by-play data for a sample of games.
     # 2. Extract player-level shooting sequences from the play-by-play data.
@@ -123,7 +182,6 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
     #implement 
     gammas = [gamma_C, gamma_N, gamma_H]
 
-    C, N, H = initial_distribution
     belief = initial_distribution
     Xi = [clock_sequence, is_home_sequence]
     # print(f"clock_sequence len = {len(clock_sequence)}, shot_sequence len = {len(shot_sequence)}, is_home_sequence len = {len(is_home_sequence)}")
@@ -156,9 +214,9 @@ def process(shot_sequence, clock_sequence, is_home_sequence, initial_distributio
         prior = [0, 0, 0] # The prior
         Xi_n = [stat_list[i] for stat_list in Xi]
         C, N, H = belief
-        pCC, pCH, pCN = softmax_regression(C, C, H, Xi_n)
-        pNC, pNH, pNN = softmax_regression(N, C, H, Xi_n)
-        pHC, pHH, pHN = softmax_regression(H, C, H, Xi_n)
+        pCC, pCH, pCN = softmax_regression('C', Xi_n, game_id=i)
+        pNC, pNH, pNN = softmax_regression('N', Xi_n, game_id=i)
+        pHC, pHH, pHN = softmax_regression('H', Xi_n, game_id=i)
         # print(f"")
 
         # Note: Each row is a transition distance (I think) from the notes

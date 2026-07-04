@@ -31,8 +31,8 @@ class NCAADataFetcher:
         counter = 0
         while specific_date < self.SEASON_END:
             # Only inspect the first date in this reduced testing mode.
-            if counter > 10: #####################################################################################################################
-                break
+            '''if counter > 25: #####################################################################################################################
+                break'''
             # Format the date to match the API path shape YYYY/MM/DD.
             date_str = specific_date.strftime("%Y/%m/%d")
             # Request the daily scoreboard for Division I men's basketball.
@@ -61,9 +61,9 @@ class NCAADataFetcher:
                 away_team_conference = away_team['conferences'][0]['conferenceSeo']
                 if away_team_conference != "big-12" and home_team_conference != "big-12":
                     continue
-                counter += 1 # Only trigger counter if we find a big 12 game
-                if counter > 10: ######################################################################################################################
-                    break
+                counter += 1 # Only trigger counter if we find a game with a big 12 team
+                '''if counter > 25: ######################################################################################################################
+                    break'''
                 list_of_game_ids.append(game_id)
                 print(f"len of list_of_game_ids: {len(list_of_game_ids)}, counter value: {counter}")
                 # print(f"keys in game object: {game['game'].keys()}")
@@ -88,9 +88,10 @@ class NCAADataFetcher:
 
         # Use only a small subset of games while debugging so the API load stays low.
         list_of_game_ids = self.get_game_ids()[:self.MAX_TEST_GAMES]
+        list_of_game_ids = self.get_game_ids()
 
         # Give a quick progress summary before making the per-game requests.
-        print(f"Found {len(list_of_game_ids)} game IDs for testing.")
+        # print(f"Found {len(list_of_game_ids)} game IDs for testing.")
 
         # Store one parsed play-by-play payload per game.
         list_of_pbp_data = []
