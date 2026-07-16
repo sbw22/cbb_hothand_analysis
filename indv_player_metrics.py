@@ -1,12 +1,125 @@
 import numpy as np
 from hothand_v2 import build_transition_matrix
+from dash import Dash, dcc, html, Input, Output, callback
+import plotly.express as px
 class IndvPlayerMetrics:
     def __init__(self):
-        STATE_NAMES = ['C', 'N', 'H']
-        self.STATE_NAMES = STATE_NAMES
+        self.STATE_NAMES = ['C', 'N', 'H']
+        self.STATE_NAMES_DISPLAY = ['Cold', 'Neutral', 'Hot']
+        self.STATE_COLORS = {'Cold': 'blue', 'Neutral': 'green', 'Hot': 'red'}
         self.build_transition_matrix = build_transition_matrix
 
-    def create_graph_data(self, all_beliefs: list, shot_sequence: list, game_shots: list, test_player_name: str):
+    def init_dash_app(self, test_player_name: str, process_params: list, all_player_names: list):
+
+        def create_occupancy_fig(occupancy_times: list):
+            occupancy_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=occupancy_times, title='Occupancy Times -- Expected Future Visits to State', color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
+            occupancy_fig.update_layout(
+                title='Occupancy Times -- # of Expected Future Visits to State',
+                autosize=True,
+                width=None,
+                height=None,
+                margin=dict(l=40, r=20, t=50, b=40),
+                showlegend=False,
+            )
+            occupancy_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
+            occupancy_fig.update_yaxes(title=' # of Expected Future Visits to State')
+
+            return occupancy_fig
+
+        def create_sojourn_fig(sojourn_times: list):
+            sojourn_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=sojourn_times, title='Sojourn Times -- Expected Time in State', color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
+            sojourn_fig.update_layout(
+                title='Sojourn Times -- # of Shots to Leave Each State',
+                autosize=True,
+                width=None,
+                height=None,
+                margin=dict(l=40, r=20, t=50, b=40),
+                showlegend=False,
+            )
+            sojourn_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
+            sojourn_fig.update_yaxes(title='# of Shots to Leave State')
+
+            return sojourn_fig
+
+        
+        app = Dash(__name__)
+        self.appended_game_stats = process_params[5]
+        self.extended_game_stats = process_params[6]
+        process_stats = self.process(*process_params[:5])
+        beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+
+        occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
+        occupancy_fig = create_occupancy_fig(occupancy_times)
+
+        sojourn_stats = self.sojourn_times(process_stats[4], 1)
+        sojourn_fig = create_sojourn_fig(sojourn_stats[1])
+
+        app.layout = html.Div(children=[
+            html.H1(f'{test_player_name}', style={'text-align': 'center'}, id='player-name-header'),
+            dcc.Dropdown(
+                id='player-dropdown',
+                options=[{'label': player, 'value': player} for player in all_player_names],
+                value = test_player_name,
+                clearable=False,
+            ),
+            dcc.Graph(
+                id='beliefs-graph', 
+                figure=beliefs_fig
+            ),
+
+            html.Div(children=[
+                html.Div(
+                    dcc.Graph(id='sojourn-graph', figure=sojourn_fig, style={'width': '100%'}, responsive=True),
+                    style={'flex': '1', 'minWidth': 0},
+                ),
+                html.Div(
+                    dcc.Graph(id='occupancy-graph', figure=occupancy_fig, style={'width': '100%'}, responsive=True),
+                    style={'flex': '1', 'minWidth': 0},
+                ),
+            ], style={'display': 'flex', 'flexDirection': 'row', 'width': '80%', 'gap': '16px', 'margin': '0 auto'}),
+
+        ])
+
+
+        @callback(
+            Output('beliefs-graph', 'figure'),
+            Output('sojourn-graph', 'figure'),
+            Output('occupancy-graph', 'figure'),
+            Output('player-name-header', 'children'),
+            Input('player-dropdown', 'value'),
+        )
+
+
+        def update_beliefs_and_sojourn_graphs(player_name: str):
+
+            updated_process_params = update_process_params(player_name)
+            process_stats = self.process(*updated_process_params[:5])
+            beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+
+
+            sojourn_stats = self.sojourn_times(process_stats[4], 1)
+            sojourn_fig = create_sojourn_fig(sojourn_stats[1])
+    
+            occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
+            occupancy_fig = create_occupancy_fig(occupancy_times)
+
+            return beliefs_fig, sojourn_fig, occupancy_fig, player_name
+
+        def update_process_params(player_name: str):
+            test_player = self.extended_game_stats[player_name]
+            game_shots = [] # holds the number of shots the player took in each game
+            for game_id, game_stats in enumerate(self.appended_game_stats):
+                for player, stats in game_stats.items():
+                    if player == player_name:
+                        game_shots.append(len(stats['three_point_sequence']))
+                        print(f"appending game {game_id} shots: {len(stats['three_point_sequence'])}, {stats['three_point_sequence']}")
+            
+            game_shots[0] = game_shots[0] - sum(game_shots[1:])
+            return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], game_shots, player_name, self.appended_game_stats, self.extended_game_stats]
+
+        return app
+
+    def create_beliefs_fig(self, all_beliefs: list, shot_sequence: list, game_shots: list, test_player_name: str):
         """
         Populate a plotly plot with the data from all beliefs. Include on each shot if the player made or missed the shot, ideally with a closed circle if the shot was made and an open circle if the shot was missed.
         Add lines that seperate each game.
@@ -41,8 +154,12 @@ class IndvPlayerMetrics:
         fig.update_layout(title=f'Beliefs over Time- {test_player_name}', xaxis_title='Shot Number', yaxis_title='Belief (%)')
         fig.update_yaxes(range=[0, y_max+0.1])
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        fig.show()
-        return
+        # fig.show()
+
+        # return the figure
+        return fig
+
+
 
     # =============================================================================
     # LEGACY FORWARD FILTER (kept for single-game diagnostic use)
@@ -95,10 +212,16 @@ class IndvPlayerMetrics:
         for j, row in enumerate(p):
             print(f"  {self.STATE_NAMES[j]}: {row}")
 
+        # initial_state = np.where(all_beliefs[0] == max(all_beliefs[0]))[0][0]
+        last_state = np.where(all_beliefs[-1] == max(all_beliefs[-1]))[0][0]
+
         self.t_step_transition_probabilities(p, 10)
-        self.occupancy_times(p, n=M - 1, initial_state=0)
+        # self.occupancy_times(p, n= M - 1, initial_state=initial_state)
+        occupancy_times = self.occupancy_times(p, n= 9, initial_state=last_state) # Sampling the next 10 shots, so last_state is the initial state
         self.sojourn_times(p, t=1)
-        self.create_graph_data(all_beliefs, shot_sequence, game_shots, test_player_name)
+        # self.create_beliefs_fig(all_beliefs, shot_sequence, game_shots, test_player_name)
+
+        return [all_beliefs, shot_sequence, game_shots, test_player_name, p, [occupancy_times, last_state]]
 
         
 
@@ -127,11 +250,16 @@ class IndvPlayerMetrics:
 
         expected = [1.0 / (1 - p[j, j]) if p[j, j] < 1 else float('inf') for j in range(3)]
 
+
+        # Round to 3 decimal places
+        sojourn = [round(sojourn[j], 3) for j in range(3)]
+        expected = [round(expected[j], 3) for j in range(3)]
+
         print(f"\nSojourn time distribution P(sojourn={t}):")
         for j in range(3):
             print(f"  {self.STATE_NAMES[j]}: P={sojourn[j]:.3f}  |  E[sojourn]={expected[j]:.2f} shots")
 
-        return sojourn
+        return [sojourn, expected]
 
 
     def occupancy_times(self, p, n, initial_state=None):
@@ -141,6 +269,8 @@ class IndvPlayerMetrics:
 
         Computed as M = sum_{t=0}^{n} P^t (matrix geometric series).
         """
+        M_occ_init_state = [] # Occupancy times from initial state
+
         np_p = np.array(p, dtype=float)
         M_occ = np.zeros((3, 3))
         P_power = np.eye(3)
@@ -158,6 +288,7 @@ class IndvPlayerMetrics:
             print(f"\nStarting from {self.STATE_NAMES[initial_state]}:")
             for k in range(3):
                 print(f"  E[visits to {self.STATE_NAMES[k]}]: {M_occ[initial_state, k]:.3f}")
-            return M_occ[initial_state]
+                M_occ_init_state.append(round(float(M_occ[initial_state, k]), 3))
+            return M_occ_init_state
 
         return M_occ

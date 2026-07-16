@@ -7,6 +7,7 @@ from scipy.stats import invwishart
 from fetch_ncaa_data import NCAADataFetcher
 import pickle
 import os
+from dash import Dash, html, dcc
 # =============================================================================
 # NOTATION REFERENCE
 # =============================================================================
@@ -72,7 +73,7 @@ def build_transition_row(current_state: str, Xi_n: np.ndarray, game_id: int) -> 
     The reference category (η=0) is always "stay in current state", so
     only the two off-diagonal etas are computed. This ensures identifiability.
     """
-    b_i = b_i_store.get(game_id, np.zeros(6))
+    b_i = b_i_store.get(game_id, np.zeros(6)) # b_i: The game-level random effect scalar for the transition. IT HAS 6 ELEMENTS, ONE FOR EACH TRANSITION PAIR.
 
     if current_state == 'C':
         eta_H = Xi_n @ beta['CH'] + b_i[T_IDX['CH']]
@@ -244,11 +245,16 @@ def log_likelihood_transition(beta_vec: np.ndarray, b_i_scalar: float,
         #   p(this transition | from src) vs p(not this transition | from src)
         # This is an approximation that's standard when updating one β at a time.
         # For a full joint update you'd need all etas simultaneously.
-        p = exp(eta) / (1.0 + exp(eta))
+        p = exp(eta) / (1.0 + exp(eta)) # Probability of the transition occurring
         p = min(max(p, 1e-10), 1 - 1e-10)   # numerical clip
         ll += log(p) if did_transition else log(1.0 - p)
+    
+    """
+    The larger ll, the more likely the transition is to occur, and the better beta is at predicting the transition.
+    """
 
     return ll
+
 
 
 def log_prior_beta(beta_vec: np.ndarray, prior_var: float = 1.0) -> float:
@@ -257,6 +263,12 @@ def log_prior_beta(beta_vec: np.ndarray, prior_var: float = 1.0) -> float:
     The paper doesn't specify β's prior exactly; N(0,1) per component is standard.
     """
     return -0.5 * np.sum(beta_vec ** 2) / prior_var
+    """
+    Initial pdf: p(x) = (2π sigma^2)^(-1/2) * exp(-x^2) / (2 sigma^2)). Return statement returns how tall the N(0, prior_var) is at the value of beta_vec (I think).
+    Taking log of initial pdf gives the statement in return
+    This distribution is a normal distribution with mean 0 and variance prior_var.
+    Since it is a log prior, pdf densities range from 0 downwards. 
+    """
 
 
 # =============================================================================
@@ -321,7 +333,9 @@ def mh_update_beta(transition: str, all_games: list,
 
     log_ratio = (ll_proposed + lp_proposed) - (ll_current + lp_current)
 
-    if log(np.random.uniform()) < log_ratio:
+    # the log of a uniform distribution is between 0 and -infinity. This follows the mh notes I have (I think), 
+    # since ratios above 0 will then always be accepted, and ratio below 0 will sometimes be accepted.
+    if log(np.random.uniform()) < log_ratio: 
         beta[transition] = proposed
         return True
     return False
@@ -350,10 +364,10 @@ def log_likelihood_b_i(b_i_vec: np.ndarray, game: dict,
 
     for n in range(M - 1):
         Xi_n = Xi_seq[n]
-        src = STATE_NAMES[Z[n]]
+        src = STATE_NAMES[Z[n]] 
         dst = Z[n + 1]
         row = build_transition_row(src, Xi_n, gid)
-        p = min(max(row[dst], 1e-10), 1.0)
+        p = min(max(row[dst], 1e-10), 1.0) # row[dst]: How probable the transition is from src to dst.
         ll += log(p)
 
     # Restore
@@ -366,8 +380,14 @@ def log_prior_b_i(b_i_vec: np.ndarray) -> float:
     Log prior for one game's random effect vector: N(0, Sigma_b).
     log p(b_i) = -0.5 * b_i^T Sigma_b^{-1} b_i  + const
     """
-    Sigma_b_inv = np.linalg.inv(Sigma_b)
-    return -0.5 * b_i_vec @ Sigma_b_inv @ b_i_vec
+    Sigma_b_inv = np.linalg.inv(Sigma_b) # Sigma_b: 6x6 matrix, diagonal values are variances of each transition. Non-diagonal values = covariances between transitions, which means how much the transitions are correlated.
+    # Sigma_b_inv: doing same job as 1/prior_var in log_prior_beta. Both are strength-penalty terms.
+    return -0.5 * b_i_vec @ Sigma_b_inv @ b_i_vec # Same math as log_prior_beta, just with Sigma_b_inv instead of 1 / prior_var.
+    """
+    pdf in log form: p(x) = log p(x) = -0.5*log((2π)^k |Σ|)  -  0.5 * x^T Σ^-1 x
+    We are dropping the constant term -0.5*log((2π)^k |Σ|) because it is not dependent on x, and it (mainly Sigma_b) doesn't change between when we calculate the log prior for the current and proposed values.
+    |Σ|: determinant of the matrix.
+    """
 
 
 def mh_update_b_i(game: dict, Z: np.ndarray,
@@ -382,9 +402,9 @@ def mh_update_b_i(game: dict, Z: np.ndarray,
     current = b_i_store.get(gid, np.zeros(6)).copy()
 
     # Propose from multivariate normal centered on current value
-    proposed = current + np.random.multivariate_normal(np.zeros(6), step_size**2 * Sigma_b)
+    proposed = current + np.random.multivariate_normal(np.zeros(6), step_size**2 * Sigma_b) # Sigma_b makes the pattern of proposed (ex CN goes up when CH goes up) more likely to be close to Sigma_b's. 
 
-    ll_current  = log_likelihood_b_i(current,  game, Z, gammas)
+    ll_current  = log_likelihood_b_i(current, game, Z, gammas)
     ll_proposed = log_likelihood_b_i(proposed, game, Z, gammas)
     lp_current  = log_prior_b_i(current)
     lp_proposed = log_prior_b_i(proposed)
@@ -793,14 +813,16 @@ def main():
 
 
     while True:
-        user_input = input("Enter the player name: ")
-        if user_input in extended_game_stats:
+        # user_input = input("Enter the player name: ")
+        user_input = "Tre White"
+        all_player_names = list(extended_game_stats.keys())
+        if user_input in all_player_names:
             test_player_name = user_input
         else:
             print("Player not found. Please try again.")
             continue
 
-        # Run forward filter on the test player (Milan Momcilovic)
+        # Run forward filter on the test player (example: Milan Momcilovic)
         print(f"\nRunning forward filter on the test player ({test_player_name})...")
         test_player = extended_game_stats[test_player_name]
         # Get amount of shots the player took each game
@@ -814,14 +836,22 @@ def main():
         game_shots[0] = game_shots[0] - sum(game_shots[1:])
         print(f"game_shots: {game_shots}")
 
+        process_params = [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], game_shots, test_player_name, appended_game_stats, extended_game_stats]
+
         
-        indv_player_metrics.process(
+        '''all_beliefs = indv_player_metrics.process(
             test_player['three_point_sequence'],
             test_player['clock_time_sequence_three_point'],
             test_player['is_home_sequence_three_point'],
             game_shots,
             test_player_name
-        )
+        )'''
+
+
+        app = indv_player_metrics.init_dash_app(test_player_name, process_params, all_player_names)
+        app.run(debug=True)
+
+        # break
 
 
 # if __name__ == "__main__":
