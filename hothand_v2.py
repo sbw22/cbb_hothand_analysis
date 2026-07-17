@@ -794,8 +794,7 @@ def main():
             verbose=True
         )
 
-        print(f"samples[0]: {samples[0]}")
-        reguihjbernf
+
 
         print(f"Saved {len(samples.get('beta', []))} post-warmup MCMC draws")
 
