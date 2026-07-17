@@ -849,7 +849,10 @@ def main():
 
 
         app = indv_player_metrics.init_dash_app(test_player_name, process_params, all_player_names)
-        app.run(debug=True)
+        
+        # app.run(debug=True)
+
+        return app
 
         # break
 

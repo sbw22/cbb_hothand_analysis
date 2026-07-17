@@ -117,6 +117,7 @@ class IndvPlayerMetrics:
             game_shots[0] = game_shots[0] - sum(game_shots[1:])
             return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], game_shots, player_name, self.appended_game_stats, self.extended_game_stats]
 
+        
         return app
 
     def create_beliefs_fig(self, all_beliefs: list, shot_sequence: list, game_shots: list, test_player_name: str):
@@ -151,7 +152,7 @@ class IndvPlayerMetrics:
         for i in range(len(game_start_indices)):
             print(f"Game start index: {game_start_indices[i]}")
             fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='black', width=2 ))
-        fig.update_layout(title=f'Beliefs over Time- {test_player_name}', xaxis_title='Shot Number', yaxis_title='Belief (%)')
+        fig.update_layout(title=f'Beliefs over Time - {test_player_name}', xaxis_title='Shot Number', yaxis_title='Belief (%)')
         fig.update_yaxes(range=[0, y_max+0.1])
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         # fig.show()
