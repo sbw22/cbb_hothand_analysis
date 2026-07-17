@@ -591,7 +591,7 @@ def summarize_mcmc(samples: dict) -> None:
         print(f"  {key}: {rate:.3f}")
 
 
-def apply_mcmc_samples_to_globals(samples: dict, method: str = 'mean') -> bool:
+def apply_mcmc_samples_to_globals(samples: dict, method: str = 'last') -> bool:
     """
     Copy saved MCMC chains into module-level beta, b_i_store, and Sigma_b.
 
@@ -684,10 +684,10 @@ def main():
 
 
     # If the file all_games_for_mcmc.pkl exists, load it and skip running the MCMC
-    if os.path.exists('stats_and_samples/all_games_for_mcmc.pkl') and os.path.exists('stats_and_samples/mcmc_samples.pkl') and os.path.exists('stats_and_samples/extended_game_stats.pkl') and os.path.exists('stats_and_samples/appended_game_stats.pkl'):
-        with open('stats_and_samples/all_games_for_mcmc.pkl', 'rb') as f:
+    if os.path.exists('stats_and_samples/mcmc_samples.pkl') and os.path.exists('stats_and_samples/extended_game_stats.pkl') and os.path.exists('stats_and_samples/appended_game_stats.pkl'): # and os.path.exists('stats_and_samples/all_games_for_mcmc.pkl'):
+        '''with open('stats_and_samples/all_games_for_mcmc.pkl', 'rb') as f:
             all_games_for_mcmc = pickle.load(f)
-        print(f"Loaded {len(all_games_for_mcmc)} games from all_games_for_mcmc.pkl")
+        print(f"Loaded {len(all_games_for_mcmc)} games from all_games_for_mcmc.pkl")'''
         with open('stats_and_samples/mcmc_samples.pkl', 'rb') as f:
             samples = pickle.load(f)
         print(f"Loaded MCMC samples with {len(samples.get('beta', []))} post-warmup draws")
@@ -698,11 +698,16 @@ def main():
             appended_game_stats = pickle.load(f)
         print(f"Loaded {len(appended_game_stats)} appended game stats from appended_game_stats.pkl")
 
+        samples['beta'] = [samples['beta'][0]]
+        samples['b_i'] = [samples['b_i'][0]]
+        samples['Sigma_b'] = [samples['Sigma_b'][0]]
+
+
         apply_mcmc_samples_to_globals(samples, method='last')
 
     else:
         # If the files don't exist, run the MCMC
-        print("No stats_and_samples/all_games_for_mcmc.pkl, stats_and_samples/mcmc_samples.pkl, stats_and_samples/extended_game_stats.pkl, or stats_and_samples/appended_game_stats.pkl file found. Running MCMC.")
+        print("No stats_and_samples/mcmc_samples.pkl, stats_and_samples/extended_game_stats.pkl, or stats_and_samples/appended_game_stats.pkl file found. Running MCMC.")
 
         pbp_data = ncaa_data_fetcher.get_pbp_data()
         print(f"Finished getting play-by-play data for {len(pbp_data)} games.")
@@ -789,6 +794,9 @@ def main():
             verbose=True
         )
 
+        print(f"samples[0]: {samples[0]}")
+        reguihjbernf
+
         print(f"Saved {len(samples.get('beta', []))} post-warmup MCMC draws")
 
         print(f"beta: {beta}")
@@ -798,9 +806,11 @@ def main():
         summarize_mcmc(samples)
         apply_mcmc_samples_to_globals(samples, method='last')
 
+
+
         # Save the all_games_for_mcmc list to a file
-        with open('stats_and_samples/all_games_for_mcmc.pkl', 'wb') as f:
-            pickle.dump(all_games_for_mcmc, f)
+        '''with open('stats_and_samples/all_games_for_mcmc.pkl', 'wb') as f:
+            pickle.dump(all_games_for_mcmc, f)'''
 
         # Save values needed for indv_player_metrics in a file
         with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
