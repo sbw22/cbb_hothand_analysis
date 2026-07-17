@@ -586,9 +586,9 @@ def summarize_mcmc(samples: dict) -> None:
     for i, t in enumerate(TRANSITIONS):
         print(f"  Var(b_i^{t}): {Sigma_mean[i, i]:.3f}")
 
-    print("\nMH Acceptance rates:")
+    '''print("\nMH Acceptance rates:")
     for key, rate in samples['acceptance'].items():
-        print(f"  {key}: {rate:.3f}")
+        print(f"  {key}: {rate:.3f}")'''
 
 
 def apply_mcmc_samples_to_globals(samples: dict, method: str = 'last') -> bool:
@@ -702,6 +702,9 @@ def main():
         samples['b_i'] = [samples['b_i'][0]]
         samples['Sigma_b'] = [samples['Sigma_b'][0]]
 
+        '''with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
+            pickle.dump(samples, f)'''
+
 
         apply_mcmc_samples_to_globals(samples, method='last')
 
@@ -798,9 +801,9 @@ def main():
 
         print(f"Saved {len(samples.get('beta', []))} post-warmup MCMC draws")
 
-        print(f"beta: {beta}")
+        # print(f"beta: {beta}")
 
-        print(f"samples[acceptance]: {samples['acceptance']}")
+       # print(f"samples[acceptance]: {samples['acceptance']}")
 
         summarize_mcmc(samples)
         apply_mcmc_samples_to_globals(samples, method='last')
