@@ -705,7 +705,6 @@ def main():
         '''with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
             pickle.dump(samples, f)'''
 
-
         apply_mcmc_samples_to_globals(samples, method='last')
 
     else:
