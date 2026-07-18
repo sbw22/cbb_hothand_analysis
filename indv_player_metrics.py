@@ -198,22 +198,15 @@ class IndvPlayerMetrics:
                 x=missed_x, y=[marker_y] * len(missed_x), mode='markers', name='Missed',
                 marker=dict(color='red', size=10, symbol='circle-open', line=dict(color='red', width=2)),
             ))
-        for i in range(len(game_start_indices)):
+        for i in range(1, len(game_start_indices)):
             print(f"Game start index: {game_start_indices[i]}")
-            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='black', width=2 ))
+            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='black', width=2 ), name="Game Seperator Line")
             fig.update_layout(title=f'<b>Beliefs over Time - {test_player_name}</b> ', xaxis_title='Shot Number', yaxis_title='Belief Probability (%)')
             # 2. Add an annotation right below the title but above the data
-        '''fig.add_annotation(
-            text="This plot shows the player's probabilities of being in each state <br>over time. Each line represents the probability of the player being in that <br>specific state. The shots that were made and missed are marked with a <br>green and red circle respectively.",
-            xref="paper", 
-            yref="paper",
-            x=0,          # Aligns text to the left edge of the plot area
-            y=1.32,       # Pushes it slightly above the plot canvas boundary (y=1.0)
-            showarrow=False,
-            width= 500,
-            align="left", # Left-align text lines
-            font=dict(size=13, color="gray")
-        )'''
+
+        # legend-only stub
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines', name='Game Separator Line', line=dict(color='black', width=2)))
+        
         fig.update_yaxes(range=[0, y_max+0.1])
         fig.update_layout(
             # margin=dict(t=150),
