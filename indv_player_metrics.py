@@ -77,12 +77,13 @@ class IndvPlayerMetrics:
         sojourn_fig = create_sojourn_fig(sojourn_stats[1])
 
         app.layout = html.Div(children=[
-            html.H1(f'{test_player_name}', style={'text-align': 'center'}, id='player-name-header'),
+            html.H1(f'Hot Hand Probability Analysis', style={'text-align': 'center'}),
             dcc.Dropdown(
                 id='player-dropdown',
                 options=[{'label': player, 'value': player} for player in all_player_names],
                 value = test_player_name,
                 clearable=False,
+                style={'font-size': '20px', 'color': 'black', 'width': '20%', 'margin': '0 auto', 'text-align': 'center'}
             ),
             # This plot shows the player's probabilities of being in each state <br>over time. Each line represents the probability of the player being in that <br>specific state. The shots that were made and missed are marked with a <br>green and red circle respectively.",
             
@@ -134,25 +135,31 @@ class IndvPlayerMetrics:
             Output('beliefs-graph', 'figure'),
             Output('sojourn-graph', 'figure'),
             Output('occupancy-graph', 'figure'),
-            Output('player-name-header', 'children'),
+            # Output('player-name-header', 'children'),
             Input('player-dropdown', 'value'),
         )
 
 
         def update_beliefs_and_sojourn_graphs(player_name: str):
 
-            updated_process_params = update_process_params(player_name)
-            process_stats = self.process(*updated_process_params[:5])
-            beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+            try: 
+                updated_process_params = update_process_params(player_name)
+                process_stats = self.process(*updated_process_params[:5])
+                beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+
+                sojourn_stats = self.sojourn_times(process_stats[4], 1)
+                sojourn_fig = create_sojourn_fig(sojourn_stats[1])
+        
+                occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
+                occupancy_fig = create_occupancy_fig(occupancy_times)
+
+                return beliefs_fig, sojourn_fig, occupancy_fig
+
+            except Exception as e:
+                print(f"Error creating beliefs figure: {e}")
+                return None, None, None
 
 
-            sojourn_stats = self.sojourn_times(process_stats[4], 1)
-            sojourn_fig = create_sojourn_fig(sojourn_stats[1])
-    
-            occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
-            occupancy_fig = create_occupancy_fig(occupancy_times)
-
-            return beliefs_fig, sojourn_fig, occupancy_fig, player_name
 
         def update_process_params(player_name: str):
             test_player = self.extended_game_stats[player_name]
