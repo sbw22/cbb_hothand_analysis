@@ -1,6 +1,7 @@
 import numpy as np
 from hothand_v2 import build_transition_matrix
 from dash import Dash, dcc, html, Input, Output, callback
+import plotly.graph_objects as go
 import plotly.express as px
 class IndvPlayerMetrics:
     def __init__(self):
@@ -24,16 +25,6 @@ class IndvPlayerMetrics:
             occupancy_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
             occupancy_fig.update_yaxes(title=' # of Expected Shots in Each State')
 
-            '''occupancy_fig.add_annotation(
-            text="This plot shows the expected number of times the player is expected to be in each state over the next 10 shots.",
-            xref="paper", 
-            yref="paper",
-            x=0.5,          # Aligns text to the left edge of the plot area
-            y=0.5,       # Pushes it slightly above the plot canvas boundary (y=1.0)
-            showarrow=False,
-            align="center", # Left-align text lines
-            font=dict(size=13, color="gray")
-            )'''
 
             return occupancy_fig
 
@@ -50,25 +41,74 @@ class IndvPlayerMetrics:
             sojourn_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
             sojourn_fig.update_yaxes(title='# of Shots to Leave State')
 
-            '''sojourn_fig.add_annotation(
-            text="This plot shows the expected time in each state over the next 10 shots.",
-            xref="paper", 
-            yref="paper",
-            x=0.5,          # Aligns text to the left edge of the plot area
-            y=0.5,       # Pushes it slightly above the plot canvas boundary (y=1.0)
-            showarrow=False,
-            align="center", # Left-align text lines
-            font=dict(size=13, color="gray")
-            )'''
 
             return sojourn_fig
+
+        def create_belief_occupancy_fig(beliefs_percentages: list):
+            # We are creating a horizonal multi-colored bar, with the colors inside the bar representing the probabilities of the player being in each state.
+            # 2. Build the stacked horizontal bar
+            fig = go.Figure()
+            bar_1 = beliefs_percentages[0]
+            bar_2 = beliefs_percentages[1]
+            bar_3 = beliefs_percentages[2]
+
+            fig.add_trace(go.Bar(
+                x=[bar_1],
+                # y=[self.STATE_NAMES_DISPLAY[0]],
+                orientation='h',
+                marker_color=self.STATE_COLORS[self.STATE_NAMES_DISPLAY[0]],
+                name=self.STATE_NAMES_DISPLAY[0],
+                text=[f"{bar_1:.2f}%"],
+                textposition='auto',
+                insidetextanchor='middle',
+            ))
+
+            fig.add_trace(go.Bar(
+                x=[bar_2],
+                # y=[self.STATE_NAMES_DISPLAY[1]],
+                orientation='h',
+                marker_color=self.STATE_COLORS[self.STATE_NAMES_DISPLAY[1]],
+                name=self.STATE_NAMES_DISPLAY[1],
+                text=[f"{bar_2:.2f}%"],
+                textposition='auto',
+                insidetextanchor='middle',
+            ))
+
+            fig.add_trace(go.Bar(
+                x=[bar_3],
+                # y=[self.STATE_NAMES_DISPLAY[2]],
+                orientation='h',
+                marker_color=self.STATE_COLORS[self.STATE_NAMES_DISPLAY[2]],
+                name=self.STATE_NAMES_DISPLAY[2],
+                text=[f"{bar_3:.2f}%"],
+                textposition='auto',
+                insidetextanchor='middle',
+            ))
+
+            # 3. Force the layout to stack the bars next to each other
+            fig.update_layout(
+                title="Amount of Time as Most Likely State",
+                title_x=0.5,
+                title_y=0.9,
+                barmode='stack',
+                xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False),
+                yaxis=dict(showticklabels=False, showgrid=False),
+                margin=dict(l=20, r=20, t=40, b=20),
+                height=100,
+                showlegend=False,
+                
+            )
+
+            return fig
 
         
         app = Dash(__name__)
         self.appended_game_stats = process_params[5]
         self.extended_game_stats = process_params[6]
         process_stats = self.process(*process_params[:5])
-        beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+        beliefs_fig, beliefs_percentages = self.create_beliefs_fig(*process_stats[:4])
+
+        belief_occupancy_fig = create_belief_occupancy_fig(beliefs_percentages)
 
         occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
         occupancy_fig = create_occupancy_fig(occupancy_times)
@@ -76,8 +116,19 @@ class IndvPlayerMetrics:
         sojourn_stats = self.sojourn_times(process_stats[4], 1)
         sojourn_fig = create_sojourn_fig(sojourn_stats[1])
 
+
         app.layout = html.Div(children=[
             html.H1(f'Hot Hand Probability Analysis', style={'text-align': 'center'}),
+
+            html.Pre(children=[
+                "\tHow do you know if a player is on a hot streak? The short answer is that you can't. Coaches even at the highest levels of the game have had trouble identifying players with a hot hand. This has led to inefficiencies in a coach's ability to use a player's hot hand to their advantage. However, while it is difficult to identify a player's hot hand, coaches use many different tools and resources to help them identify players with a hot hand, including their own intuition and observations of the player's performance.", 
+                html.Br(), 
+                html.Br(), 
+                "\tThis project aims to provide another tool for coaches, analysts, and other basketball enthusiasts to help them identify players with a hot hand. This model uses a Bayesian approach to calculate the player's statistical probabilities of being in each state (Cold, Neutral, Hot) over time.",
+            ],
+            
+            style={'font-size': '14px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'margin-bottom': '20px', 'white-space': 'pre-wrap'}),
+
             dcc.Dropdown(
                 id='player-dropdown',
                 options=[{'label': player, 'value': player} for player in all_player_names],
@@ -92,6 +143,12 @@ class IndvPlayerMetrics:
                 dcc.Graph(
                     id='beliefs-graph', 
                     figure=beliefs_fig,
+                ),
+                dcc.Graph(
+                    id='belief-occupancy-graph', 
+                    figure=belief_occupancy_fig,
+                    config={'displayModeBar': False},
+                    style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
                 ),
                 html.Div(
                     html.P("This plot shows the player's probabilities of being in each state over time. Each line represents the probability of the player being in that specific state over time. The shots that were made and missed are marked with a green and red circle respectively."),
@@ -133,6 +190,7 @@ class IndvPlayerMetrics:
 
         @callback(
             Output('beliefs-graph', 'figure'),
+            Output('belief-occupancy-graph', 'figure'),
             Output('sojourn-graph', 'figure'),
             Output('occupancy-graph', 'figure'),
             # Output('player-name-header', 'children'),
@@ -145,19 +203,21 @@ class IndvPlayerMetrics:
             try: 
                 updated_process_params = update_process_params(player_name)
                 process_stats = self.process(*updated_process_params[:5])
-                beliefs_fig = self.create_beliefs_fig(*process_stats[:4])
+                beliefs_fig, beliefs_percentages = self.create_beliefs_fig(*process_stats[:4])
 
                 sojourn_stats = self.sojourn_times(process_stats[4], 1)
                 sojourn_fig = create_sojourn_fig(sojourn_stats[1])
+
+                belief_occupancy_fig = create_belief_occupancy_fig(beliefs_percentages)
         
                 occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
                 occupancy_fig = create_occupancy_fig(occupancy_times)
 
-                return beliefs_fig, sojourn_fig, occupancy_fig
+                return beliefs_fig, belief_occupancy_fig, sojourn_fig, occupancy_fig
 
             except Exception as e:
                 print(f"Error creating beliefs figure: {e}")
-                return None, None, None
+                return None, None, None, None
 
 
 
@@ -181,8 +241,13 @@ class IndvPlayerMetrics:
         Populate a plotly plot with the data from all beliefs. Include on each shot if the player made or missed the shot, ideally with a closed circle if the shot was made and an open circle if the shot was missed.
         Add lines that seperate each game.
         """
-        import plotly.graph_objects as go
         beliefs = np.array(all_beliefs)   # shape (num_shots, 3)
+        top_beliefs = [beliefs[i, :].argmax() for i in range(len(beliefs))]
+        top_beliefs_counts = [top_beliefs.count(i) for i in range(3)]
+        top_beliefs_percentages = [top_beliefs_counts[i] / len(beliefs) * 100 for i in range(3)]
+        print(f"\n\ntop_beliefs: {top_beliefs}\n\ntop_beliefs_counts: {top_beliefs_counts}\n\n")
+        print(f"\n\ntop_beliefs_percentages: {top_beliefs_percentages}\n\n")
+
         x = list(range(1, len(beliefs) + 1))   # display shots as 1, 2, 3, ...
         made = [shot == 0 for shot in shot_sequence]
         game_start_indices = [1 + sum(game_shots[:i]) for i in range(len(game_shots))]
@@ -207,19 +272,19 @@ class IndvPlayerMetrics:
             ))
         for i in range(1, len(game_start_indices)):
             print(f"Game start index: {game_start_indices[i]}")
-            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='black', width=2 ), name="Game Seperator Line")
-            fig.update_layout(title=f'<b>Beliefs over Time - {test_player_name}</b> ', xaxis_title='Shot Number', yaxis_title='Belief Probability (%)')
+            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='grey', width=2 ), name="Game Seperator Line")
+            fig.update_layout(title=f'<b>Beliefs over Time</b> ', xaxis_title='Shot Number', yaxis_title='Belief Probability (%)')
             # 2. Add an annotation right below the title but above the data
 
         # legend-only stub
-        fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines', name='Game Separator Line', line=dict(color='black', width=2)))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines', name='Game Separator Line', line=dict(color='grey', width=2)))
         
         fig.update_yaxes(range=[0, y_max+0.1])
         fig.update_layout(
             # margin=dict(t=150),
             legend=dict(orientation="h", yanchor="top", y=1.02, xanchor="right", x=1, ))
 
-        return fig
+        return fig, top_beliefs_percentages
 
     # =============================================================================
     # LEGACY FORWARD FILTER (kept for single-game diagnostic use)
