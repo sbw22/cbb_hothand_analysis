@@ -44,7 +44,7 @@ class IndvPlayerMetrics:
 
             return sojourn_fig
 
-        def create_belief_occupancy_fig(beliefs_percentages: list):
+        def create_custom_bar_fig(beliefs_percentages: list, is_summed: bool = False):
             # We are creating a horizonal multi-colored bar, with the colors inside the bar representing the probabilities of the player being in each state.
             # 2. Build the stacked horizontal bar
             fig = go.Figure()
@@ -85,9 +85,16 @@ class IndvPlayerMetrics:
                 insidetextanchor='middle',
             ))
 
+            title_text = "Amount of Time as Most Likely State" if not is_summed else "Share of Total Shot Probabilities"
+            hover_tooltip = (
+                "Shows the percentage of shots where each state was the single most likely state." 
+                if not is_summed else 
+                "Calculated by summing the state probabilities across all shots and converting each state's total into a percentage."
+            )
+
             # 3. Force the layout to stack the bars next to each other
             fig.update_layout(
-                title="Amount of Time as Most Likely State",
+                title="Percentage of Shots as Most Likely State" if not is_summed else "Share of Total Shot Probabilities",
                 title_x=0.5,
                 title_y=0.9,
                 barmode='stack',
@@ -96,19 +103,32 @@ class IndvPlayerMetrics:
                 margin=dict(l=20, r=20, t=40, b=20),
                 height=100,
                 showlegend=False,
-                
+            )
+
+            # Add an interactive info tooltip right next to the title
+            fig.add_annotation(
+                text="<b>ⓘ</b>",
+                x=0.88,  # Adjusts horizontal positioning right next to title
+                y=1.9,  # Places it in the title area
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=14, color="gray"),
+                hovertext=hover_tooltip, # <--- THIS IS YOUR HOVER TEXT
+                hoverlabel=dict(bgcolor="white", font_size=12, font_family="sans-serif")
             )
 
             return fig
 
         
         app = Dash(__name__)
-        self.appended_game_stats = process_params[5]
-        self.extended_game_stats = process_params[6]
-        process_stats = self.process(*process_params[:5])
-        beliefs_fig, beliefs_percentages = self.create_beliefs_fig(*process_stats[:4])
+        self.appended_game_stats = process_params[6]
+        self.extended_game_stats = process_params[7]
+        process_stats = self.process(*process_params[:6])
+        beliefs_fig, beliefs_percentages, summed_beliefs = self.create_beliefs_fig(*process_stats[:4])
 
-        belief_occupancy_fig = create_belief_occupancy_fig(beliefs_percentages)
+        belief_occupancy_fig = create_custom_bar_fig(beliefs_percentages, is_summed=False)
+        summed_beliefs_fig = create_custom_bar_fig(summed_beliefs, is_summed=True)
 
         occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
         occupancy_fig = create_occupancy_fig(occupancy_times)
@@ -144,16 +164,28 @@ class IndvPlayerMetrics:
                     id='beliefs-graph', 
                     figure=beliefs_fig,
                 ),
-                dcc.Graph(
-                    id='belief-occupancy-graph', 
-                    figure=belief_occupancy_fig,
-                    config={'displayModeBar': False},
-                    style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
-                ),
+
+                html.Div(children=[
+
+                    dcc.Graph(
+                        id='belief-occupancy-graph', 
+                        figure=belief_occupancy_fig,
+                        config={'displayModeBar': False},
+                        style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
+                    ),
+                    dcc.Graph(
+                        id='summed-beliefs-graph', 
+                        figure=summed_beliefs_fig,
+                        config={'displayModeBar': False},
+                        style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
+                    ),
+                ], style={'display': 'flex', 'flexDirection': 'row', 'width': '100%', 'gap': '0px', 'margin': '0 auto'}),
+
                 html.Div(
                     html.P("This plot shows the player's probabilities of being in each state over time. Each line represents the probability of the player being in that specific state over time. The shots that were made and missed are marked with a green and red circle respectively."),
                     style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'height': '60px'}
                 ),
+
             ], style={'display': 'flex', 'flexDirection': 'column', 'width': '100%', 'gap': '0px', 'margin': '0 auto', 'height': '100%', 'border': '2px solid black', 'margin-top': '10px', 'padding-bottom': '25px'}),
 
             html.Div(children=[
@@ -191,6 +223,7 @@ class IndvPlayerMetrics:
         @callback(
             Output('beliefs-graph', 'figure'),
             Output('belief-occupancy-graph', 'figure'),
+            Output('summed-beliefs-graph', 'figure'),
             Output('sojourn-graph', 'figure'),
             Output('occupancy-graph', 'figure'),
             # Output('player-name-header', 'children'),
@@ -202,22 +235,23 @@ class IndvPlayerMetrics:
 
             try: 
                 updated_process_params = update_process_params(player_name)
-                process_stats = self.process(*updated_process_params[:5])
-                beliefs_fig, beliefs_percentages = self.create_beliefs_fig(*process_stats[:4])
+                process_stats = self.process(*updated_process_params[:6])
+                beliefs_fig, beliefs_percentages, summed_beliefs = self.create_beliefs_fig(*process_stats[:4])
 
                 sojourn_stats = self.sojourn_times(process_stats[4], 1)
                 sojourn_fig = create_sojourn_fig(sojourn_stats[1])
 
-                belief_occupancy_fig = create_belief_occupancy_fig(beliefs_percentages)
+                belief_occupancy_fig = create_custom_bar_fig(beliefs_percentages, is_summed=False)
+                summed_beliefs_fig = create_custom_bar_fig(summed_beliefs, is_summed=True)
         
                 occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
                 occupancy_fig = create_occupancy_fig(occupancy_times)
 
-                return beliefs_fig, belief_occupancy_fig, sojourn_fig, occupancy_fig
+                return beliefs_fig, belief_occupancy_fig, summed_beliefs_fig, sojourn_fig, occupancy_fig
 
             except Exception as e:
                 print(f"Error creating beliefs figure: {e}")
-                return None, None, None, None
+                return None, None, None, None, None
 
 
 
@@ -231,7 +265,7 @@ class IndvPlayerMetrics:
                         print(f"appending game {game_id} shots: {len(stats['three_point_sequence'])}, {stats['three_point_sequence']}")
             
             game_shots[0] = game_shots[0] - sum(game_shots[1:])
-            return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], game_shots, player_name, self.appended_game_stats, self.extended_game_stats]
+            return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], test_player['opp_def_3pt_pct_avg'], game_shots, player_name, self.appended_game_stats, self.extended_game_stats]
 
         
         return app
@@ -244,6 +278,10 @@ class IndvPlayerMetrics:
         beliefs = np.array(all_beliefs)   # shape (num_shots, 3)
         top_beliefs = [beliefs[i, :].argmax() for i in range(len(beliefs))]
         top_beliefs_counts = [top_beliefs.count(i) for i in range(3)]
+        summed_beliefs = [sum(beliefs[:, i]) for i in range(3)] # sum of all beliefs for each state
+        summed_beliefs_percentages = [summed_beliefs[i] / sum(summed_beliefs) * 100 for i in range(3)]
+        print(f"\n\nsummed_beliefs: {summed_beliefs}\n\n")
+        
         top_beliefs_percentages = [top_beliefs_counts[i] / len(beliefs) * 100 for i in range(3)]
         print(f"\n\ntop_beliefs: {top_beliefs}\n\ntop_beliefs_counts: {top_beliefs_counts}\n\n")
         print(f"\n\ntop_beliefs_percentages: {top_beliefs_percentages}\n\n")
@@ -284,13 +322,13 @@ class IndvPlayerMetrics:
             # margin=dict(t=150),
             legend=dict(orientation="h", yanchor="top", y=1.02, xanchor="right", x=1, ))
 
-        return fig, top_beliefs_percentages
+        return fig, top_beliefs_percentages, summed_beliefs_percentages
 
     # =============================================================================
     # LEGACY FORWARD FILTER (kept for single-game diagnostic use)
     # =============================================================================
 
-    def process(self, shot_sequence, clock_sequence, is_home_sequence, game_shots, test_player_name,
+    def process(self, shot_sequence, clock_sequence, is_home_sequence, opp_def_3pt_pct_avg, game_shots, test_player_name,
                 initial_distribution=None,
                 gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
         """
@@ -307,7 +345,8 @@ class IndvPlayerMetrics:
         M = len(shot_sequence)
         Xi_seq = np.column_stack([
             np.array(clock_sequence[:M], dtype=float),
-            np.array(is_home_sequence[:M], dtype=float)
+            np.array(is_home_sequence[:M], dtype=float),
+            np.array(opp_def_3pt_pct_avg[:M], dtype=float),
         ])
 
         p = np.zeros((3, 3))

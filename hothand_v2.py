@@ -43,7 +43,7 @@ STATE_NAMES = ['C', 'N', 'H']
 TRANSITIONS = ['CH', 'HC', 'CN', 'NC', 'NH', 'HN']
 T_IDX = {t: i for i, t in enumerate(TRANSITIONS)}   # e.g. 'CH' -> 0
 
-NUM_FEATURES = 2   # must match len(Xi_n): [clock_time, is_home]
+NUM_FEATURES = 3   # must match len(Xi_n): [clock_time, is_home]
 
 # =============================================================================
 # GLOBAL MODEL PARAMETERS  (updated in-place during MCMC)
@@ -642,7 +642,7 @@ def apply_mcmc_samples_to_globals(samples: dict, method: str = 'last') -> bool:
 # =============================================================================
 
 def build_game_dict(game_id: int, shot_sequence: list,
-                    clock_sequence: list, is_home_sequence: list) -> dict:
+                    clock_sequence: list, is_home_sequence: list, opp_def_3pt_pct_avg: list) -> dict:
     """
     Pack raw sequences for one game into the dict format expected by MCMC.
 
@@ -651,7 +651,8 @@ def build_game_dict(game_id: int, shot_sequence: list,
     M = len(shot_sequence)
     Xi_seq = np.column_stack([
         np.array(clock_sequence[:M], dtype=float),
-        np.array(is_home_sequence[:M], dtype=float)
+        np.array(is_home_sequence[:M], dtype=float),
+        np.array(opp_def_3pt_pct_avg[:M], dtype=float)
     ])
     return {
         'game_id': game_id,
@@ -711,7 +712,7 @@ def main():
         # If the files don't exist, run the MCMC
         print("No stats_and_samples/mcmc_samples.pkl, stats_and_samples/extended_game_stats.pkl, or stats_and_samples/appended_game_stats.pkl file found. Running MCMC.")
 
-        pbp_data = ncaa_data_fetcher.get_pbp_data()
+        pbp_data, boxscore_data = ncaa_data_fetcher.get_pbp_data()
         print(f"Finished getting play-by-play data for {len(pbp_data)} games.")
 
         print(f"Inspecting the first game's play-by-play data:")
@@ -719,8 +720,9 @@ def main():
             f"{len(pbp_data[0]['periods'][0]['playbyplayStats'])} events, with keys "
             f"{pbp_data[0]['periods'][0]['playbyplayStats'][23]['homeText']}\n")
 
-        for game_info in pbp_data:
-            game_stats = ncaa_data_fetcher.get_all_player_stats_of_game(game_info)
+        for pbp_data, boxscore_data in zip(pbp_data, boxscore_data):
+            game_stats = ncaa_data_fetcher.get_all_player_stats_of_game(pbp_data, boxscore_data)
+            # re9fjigdknm
             appended_game_stats.append(game_stats)
 
             for player, stats in game_stats.items():
@@ -736,6 +738,7 @@ def main():
                 extended_game_stats[player]['clock_time_sequence_three_point'].extend(stats['clock_time_sequence_three_point'])
                 extended_game_stats[player]['is_home_sequence_two_point'].extend(stats['is_home_sequence_two_point'])
                 extended_game_stats[player]['is_home_sequence_three_point'].extend(stats['is_home_sequence_three_point'])
+                extended_game_stats[player]['opp_def_3pt_pct_avg'].extend(stats['opp_def_3pt_pct_avg'])
                 
                 
 
@@ -764,11 +767,12 @@ def main():
                 shots = player_data['three_point_sequence']
                 clocks = player_data['clock_time_sequence_three_point']
                 home = player_data['is_home_sequence_three_point']
+                opp_def_3pt_pct_avg = player_data['opp_def_3pt_pct_avg']
 
                 if len(shots) < 2:
                     continue   # need at least 2 shots for a transition
 
-                game_dict = build_game_dict(game_id, shots, clocks, home)
+                game_dict = build_game_dict(game_id, shots, clocks, home, opp_def_3pt_pct_avg)
                 all_games_for_mcmc.append(game_dict)
 
         print(f"\nRunning MCMC on {len(all_games_for_mcmc)} games for all players.")
@@ -847,13 +851,14 @@ def main():
         game_shots[0] = game_shots[0] - sum(game_shots[1:])
         print(f"game_shots: {game_shots}")
 
-        process_params = [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], game_shots, test_player_name, appended_game_stats, extended_game_stats]
+        process_params = [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], test_player['opp_def_3pt_pct_avg'], game_shots, test_player_name, appended_game_stats, extended_game_stats]
 
         
         '''all_beliefs = indv_player_metrics.process(
             test_player['three_point_sequence'],
             test_player['clock_time_sequence_three_point'],
             test_player['is_home_sequence_three_point'],
+            test_player['opp_def_3pt_pct_avg'],
             game_shots,
             test_player_name
         )'''
