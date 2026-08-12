@@ -1092,6 +1092,9 @@ def main():
         with open('stats_and_samples/all_games_for_mcmc.pkl', 'rb') as f:
             all_games_for_mcmc = pickle.load(f)
         print(f"Loaded {len(all_games_for_mcmc)} all games for MCMC from all_games_for_mcmc.pkl")
+        with open('stats_and_samples/gammas.pkl', 'rb') as f:
+            gammas = pickle.load(f)
+        print(f"Loaded gammas from gammas.pkl")
 
         # samples['beta'] = [samples['beta'][0]]
         # samples['b_i'] = [samples['b_i'][0]]
@@ -1105,7 +1108,7 @@ def main():
 
         # print(f"Running MCMC when all_games_for_mcmc.pkl exists")
 
-        samples, gammas = run_mcmc(
+        '''samples, gammas = run_mcmc(
             all_games=all_games_for_mcmc,
             gammas=GAMMAS,
             n_iter=1000,
@@ -1114,18 +1117,24 @@ def main():
             b_i_step=0.5,
             verbose=True,
             init_from=loaded_samples
-        )
-
+        )'''
+        samples = loaded_samples
         samples = canonicalize_samples(samples)
 
         GAMMAS = gammas
         summarize_mcmc(samples)
-        plot_trace(samples, warmup=5)
+        # plot_trace(samples, warmup=5)
         apply_mcmc_samples_to_globals(samples, method='mean')
 
         # Save so the *next* dev-loop run can warm-start from this one
-        with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
+        '''with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
             pickle.dump(samples, f)
+        print(f"Saved samples to mcmc_samples.pkl")
+
+        # Save gammas to a file
+        with open('stats_and_samples/gammas.pkl', 'wb') as f:
+            pickle.dump(gammas, f)
+        print(f"Saved gammas to gammas.pkl")'''
 
     else:
         # If the files don't exist, run the MCMC

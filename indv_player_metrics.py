@@ -478,7 +478,7 @@ class IndvPlayerMetrics:
 
             belief = updated / total if total > 0 else np.ones(3) / 3.0
 
-            self.log_belief_update(
+            '''self.log_belief_update(
                 shot_num=n,
                 made=made,
                 momentum=three_point_momentum[n],
@@ -487,7 +487,7 @@ class IndvPlayerMetrics:
                 likelihoods=likelihoods,
                 updated_belief=belief,
                 P=P
-            )
+            )'''
 
             p = P
 
