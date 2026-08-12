@@ -98,10 +98,10 @@ for t in TRANSITIONS:
 
 # Direct Cold<->Hot jumps: rare, strongly discouraged
 BETA_PRIOR_MEANS['CH'][5] = -2.7
-BETA_PRIOR_MEANS['HC'][5] = -2.5
+BETA_PRIOR_MEANS['HC'][5] = -2.3
 # Routing through Neutral: the "normal" pathway, mildly discouraged (still persistent, but reachable)
 BETA_PRIOR_MEANS['CN'][5] = -1.0
-BETA_PRIOR_MEANS['NC'][5] = -1.0
+BETA_PRIOR_MEANS['NC'][5] = -0.8
 BETA_PRIOR_MEANS['NH'][5] = -1.2
 BETA_PRIOR_MEANS['HN'][5] = -1.0
 
@@ -1065,6 +1065,8 @@ def main():
     # print(f"Entered main function")
     global GAMMAS
 
+    in_prod = True # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<------------------------ CHANGE THIS TO TRUE WHEN RUNNING IN PRODUCTION
+
     indv_player_metrics = IndvPlayerMetrics()
     ncaa_data_fetcher = NCAADataFetcher()
 
@@ -1092,9 +1094,7 @@ def main():
         with open('stats_and_samples/all_games_for_mcmc.pkl', 'rb') as f:
             all_games_for_mcmc = pickle.load(f)
         print(f"Loaded {len(all_games_for_mcmc)} all games for MCMC from all_games_for_mcmc.pkl")
-        with open('stats_and_samples/gammas.pkl', 'rb') as f:
-            gammas = pickle.load(f)
-        print(f"Loaded gammas from gammas.pkl")
+    
 
         # samples['beta'] = [samples['beta'][0]]
         # samples['b_i'] = [samples['b_i'][0]]
@@ -1107,21 +1107,25 @@ def main():
         # We are saving the all_games_for_mcmc list to a file for now, so we don't need to run the MCMC again to test the model.
 
         # print(f"Running MCMC when all_games_for_mcmc.pkl exists")
-
-        '''samples, gammas = run_mcmc(
-            all_games=all_games_for_mcmc,
-            gammas=GAMMAS,
-            n_iter=1000,
-            warmup=600,
-            beta_step=0.5,
-            b_i_step=0.5,
-            verbose=True,
-            init_from=loaded_samples
-        )'''
-        samples = loaded_samples
+        if not in_prod:
+            samples, gammas = run_mcmc(
+                all_games=all_games_for_mcmc,
+                gammas=GAMMAS,
+                n_iter=1000,
+                warmup=600,
+                beta_step=0.5,
+                b_i_step=0.5,
+                verbose=True,
+                init_from=loaded_samples
+            )
+        else:
+            samples = loaded_samples
+            with open('stats_and_samples/gammas.pkl', 'rb') as f:
+                gammas = pickle.load(f)
+                GAMMAS = gammas
+        print(f"Loaded gammas from gammas.pkl")
         samples = canonicalize_samples(samples)
 
-        GAMMAS = gammas
         summarize_mcmc(samples)
         # plot_trace(samples, warmup=5)
         apply_mcmc_samples_to_globals(samples, method='mean')
