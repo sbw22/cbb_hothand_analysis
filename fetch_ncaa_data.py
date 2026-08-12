@@ -12,18 +12,27 @@ class NCAADataFetcher:
 
     def __init__(self):
         self.API_HOST = "ncaa-api.henrygd.me"
-        self.SEASON_START = datetime(year=2025, month=11, day=3)
+        # self.SEASON_START = datetime(year=2025, month=11, day=3)
         self.SEASON_START = datetime(year=2026, month=1, day=1) # switched to Jan 1 for testing so we get conference games in the sample
         self.SEASON_END = datetime(year=2026, month=4, day=15)
-        self.MAX_TEST_GAMES = 50
+        # self.MAX_TEST_GAMES = 50
         self.team_def_3pt_pct_bank = {}
 
     # Centralize the API host and season boundaries so the rest of the script can
     # refer to a single source of truth instead of repeating literal values.
 
+    def get_player_info(self, player_name: str):
+        conn = http.client.HTTPSConnection(self.API_HOST)
+        conn.request("GET", f"/player/{player_name}")
+        res = conn.getresponse()
+        data = res.read()
+        decoded_data = data.decode("utf-8")
+        json_data = json.loads(decoded_data)
+        return json_data
 
 
-    '''def get_game_ids(self):
+
+    def get_game_ids(self):
 
         # Open a reusable HTTPS connection to the NCAA API host.
         conn = http.client.HTTPSConnection(self.API_HOST)
@@ -83,8 +92,9 @@ class NCAADataFetcher:
         # Close the connection before returning the accumulated game IDs.
         conn.close()
         
-        return list_of_game_ids'''
+        return list_of_game_ids
 
+    '''
     def _build_session(self):
         session = requests.Session()
         retries = Retry(
@@ -138,10 +148,10 @@ class NCAADataFetcher:
                     for game in json_data['games']:
                         list_of_game_ids.append(game['game']['gameID'])
 
-        return list_of_game_ids
+        return list_of_game_ids'''
 
 
-    '''def get_pbp_data(self):
+    def get_pbp_data(self):
 
         # Open a second connection for the play-by-play requests.
         conn = http.client.HTTPSConnection(self.API_HOST)
@@ -196,8 +206,9 @@ class NCAADataFetcher:
         # Close the connection after the batch is complete.
         conn.close()
 
-        return list_of_pbp_data, list_of_boxscore_data'''
-    
+        return list_of_pbp_data, list_of_boxscore_data
+
+    '''
     def get_pbp_data(self):
         list_of_game_ids = self.get_game_ids()
         session = self._build_session()
@@ -237,7 +248,7 @@ class NCAADataFetcher:
         list_of_pbp_data = [results[gid][0] for gid in list_of_game_ids if gid in results]
         list_of_boxscore_data = [results[gid][1] for gid in list_of_game_ids if gid in results]
 
-        return list_of_pbp_data, list_of_boxscore_data
+        return list_of_pbp_data, list_of_boxscore_data'''
     
 
     def add_team_def_3pt_pct_to_bank(self, boxscore_data):
@@ -273,6 +284,27 @@ class NCAADataFetcher:
         # print(f"team_def_3pt_pct_bank: {self.team_def_3pt_pct_bank}")
 
         return team1_id, team2_id
+
+    def create_synthetic_player_stats(self, player_stats: dict):
+
+        # print(f"keys in player_stats: {player_stats.keys()}\n\n\n\n")
+
+        # We are going to create synthetic player stats for the player 'Tre White' by randomly selecting 20% of the shots in the 3pt shot sequence to be made and 80% to be missed (for cold state) and 80% to be made and 20% to be missed (for hot state).
+
+        tre_white_stats = player_stats['Tre White']
+
+        syn_cold_tre_white_stats = tre_white_stats.copy()
+        cold_3pt_shot_sequence = np.random.choice([0, 1], size=len(tre_white_stats['three_point_sequence']), p=[0.2, 0.8]) # 0 = made, 1 = missed, 20% made, 80% missed
+        syn_cold_tre_white_stats['three_point_sequence'] = list(cold_3pt_shot_sequence)
+
+        syn_hot_tre_white_stats = tre_white_stats.copy()
+        hot_3pt_shot_sequence = np.random.choice([0, 1], size=len(tre_white_stats['three_point_sequence']), p=[0.48, 0.52]) # 48% made, 52% missed
+        syn_hot_tre_white_stats['three_point_sequence'] = list(hot_3pt_shot_sequence)
+
+        player_stats['Syn Cold Tre White'] = syn_cold_tre_white_stats
+        player_stats['Syn Hot Tre White'] = syn_hot_tre_white_stats
+
+        return player_stats
 
 
     def get_all_player_stats_of_game(self, pbp_data, boxscore_data):
@@ -352,7 +384,8 @@ class NCAADataFetcher:
                     print(f"play: {play}")
                     wefds'''
                 if player_name not in player_stats:
-                    player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence_two_point': [], 'clock_time_sequence_three_point': [], 'is_home_sequence_two_point': [], 'is_home_sequence_three_point': [], 'opp_def_3pt_pct_avg': []} # 0 = make, 1 = miss
+                    player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence_two_point': [], 'clock_time_sequence_three_point': [], 'is_home_sequence_two_point': [], 'is_home_sequence_three_point': [], 'opp_def_3pt_pct_avg': [], 'three_point_game_num': [], 'three_point_momentum': [], 'three_point_intercept': [], 'team_name': ""}  # 0 = make, 1 = miss
+                    # three_point_intercept is a list of 1s that lets each transition pair learn its own baseline log-odds seperately from the feature effects
 
                 
                 # Record whether the shot was a make or miss (0 or 1) in the appropriate sequence list for the player. This is a simple way to 
@@ -363,12 +396,16 @@ class NCAADataFetcher:
                     player_stats[player_name]['clock_time_sequence_three_point'].append(clock_time)
                     player_stats[player_name]['is_home_sequence_three_point'].append(is_home)
                     player_stats[player_name]['opp_def_3pt_pct_avg'].append(opp_def_3pt_pct_avg)
+                    player_stats[player_name]['three_point_intercept'].append(1)
+                    # player_stats[player_name]['three_point_game_num'].append(game_num)
                 elif 'misses' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
                     # print(f"Found a missed 3pt shot: {play}")
                     player_stats[player_name]['three_point_sequence'].append(1)
                     player_stats[player_name]['clock_time_sequence_three_point'].append(clock_time)
                     player_stats[player_name]['is_home_sequence_three_point'].append(is_home)
                     player_stats[player_name]['opp_def_3pt_pct_avg'].append(opp_def_3pt_pct_avg)
+                    player_stats[player_name]['three_point_intercept'].append(1)
+                    # player_stats[player_name]['three_point_game_num'].append(game_num)
                 elif 'makes' in play_list and 'two' in play_list and 'point' in play_list and 'jump' in play_list and 'shot' in play_list:
                     # print(f"Found a made 2pt shot: {play}")
                     player_stats[player_name]['two_point_sequence'].append(0)
@@ -383,10 +420,20 @@ class NCAADataFetcher:
                     player_stats[player_name]['opp_def_3pt_pct_avg'].append(opp_def_3pt_pct_avg) # CHANGE THIS LATER IF WE START USING 2PT SHOTS
                 else:
                     continue
+
+
+                if player_stats[player_name]['team_name'] == "":
+                    player_stats[player_name]['team_name'] = boxscore_data['teams'][0]['teamName'] if team_id == boxscore_data['teams'][0]['teamId'] else boxscore_data['teams'][1]['teamName']
+                
+                '''print(f"player_name: {player_name}, player_stats[player_name]['team_name']: {player_stats[player_name]['team_name']}")
+                if counter == 10:
+                    jdsfb'''
                 
                 
                 skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
                 # which should prevent us from processing the duplicate event in the play-by-play data.
                 counter += 1
+        if 'Tre White' in player_stats:
+            player_stats = self.create_synthetic_player_stats(player_stats)
 
         return player_stats

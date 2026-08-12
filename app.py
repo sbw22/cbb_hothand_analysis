@@ -1,7 +1,10 @@
 import hothand_v2
+import os
 
-app = hothand_v2.main()
-server = app.server
+print("PID:", os.getpid())
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8080)
+    app = hothand_v2.main()
+    server = app.server
+
+    app.run(debug=False, port=8080)

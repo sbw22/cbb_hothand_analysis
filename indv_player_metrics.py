@@ -1,5 +1,5 @@
 import numpy as np
-from hothand_v2 import build_transition_matrix
+from hothand_v2 import build_transition_matrix, GAMMAS
 from dash import Dash, dcc, html, Input, Output, callback
 import plotly.graph_objects as go
 import plotly.express as px
@@ -9,8 +9,13 @@ class IndvPlayerMetrics:
         self.STATE_NAMES_DISPLAY = ['Cold', 'Neutral', 'Hot']
         self.STATE_COLORS = {'Cold': 'blue', 'Neutral': 'green', 'Hot': 'red'}
         self.build_transition_matrix = build_transition_matrix
+        self.GAMMAS = GAMMAS
 
-    def init_dash_app(self, test_player_name: str, process_params: list, all_player_names: list):
+    def init_dash_app(self, test_player_name: str, process_params: list, all_player_names: list, gammas: list, verbose: bool = False):
+
+        # print(f"Entered init_dash_app function")
+        self.gammas = gammas
+        self.verbose = verbose
 
         def create_occupancy_fig(occupancy_times: list):
             occupancy_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=occupancy_times, title='Expected Number of Shots in Each State -- Next Ten Shots', color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
@@ -122,20 +127,41 @@ class IndvPlayerMetrics:
 
         
         app = Dash(__name__)
-        self.appended_game_stats = process_params[6]
-        self.extended_game_stats = process_params[7]
-        process_stats = self.process(*process_params[:6])
+        self.appended_game_stats = process_params[10]
+        self.extended_game_stats = process_params[11]
+        process_stats = self.process(*process_params[:10])
         beliefs_fig, beliefs_percentages, summed_beliefs = self.create_beliefs_fig(*process_stats[:4])
 
         belief_occupancy_fig = create_custom_bar_fig(beliefs_percentages, is_summed=False)
         summed_beliefs_fig = create_custom_bar_fig(summed_beliefs, is_summed=True)
 
         occupancy_times, last_state = process_stats[5] # Sampling the next 10 shots, so last_state is the initial state
+        # print(f"fresh occupancy_times: {occupancy_times}")
         occupancy_fig = create_occupancy_fig(occupancy_times)
 
         sojourn_stats = self.sojourn_times(process_stats[4], 1)
         sojourn_fig = create_sojourn_fig(sojourn_stats[1])
 
+        player_stats = {
+            'player_name': test_player_name,
+            'shot_sequence': process_params[0],
+            'clock_sequence': process_params[1],
+            'is_home_sequence': process_params[2],
+            'opp_def_3pt_pct_avg': process_params[3],
+            'three_point_game_num': process_params[4],
+            'three_point_momentum': process_params[5],
+            # 'game_shots': process_params[8],
+            'game_ids': process_params[8],
+            'occupancy_times': occupancy_times,
+            'sojourn_times': sojourn_stats[1],  # sojourn_times[1] is the expected number of shots to leave each state
+            'beliefs_percentages': beliefs_percentages,
+            'summed_beliefs': summed_beliefs,
+            # 'beliefs_fig': beliefs_fig,
+            # 'belief_occupancy_fig': belief_occupancy_fig,
+            # 'summed_beliefs_fig': summed_beliefs_fig,
+            # 'occupancy_fig': occupancy_fig,
+            # 'sojourn_fig': sojourn_fig,
+        }
 
         app.layout = html.Div(children=[
             html.H1(f'Hot Hand Probability Analysis', style={'text-align': 'center'}),
@@ -233,9 +259,11 @@ class IndvPlayerMetrics:
 
         def update_beliefs_and_sojourn_graphs(player_name: str):
 
+            # print(f"Updating beliefs and sojourn graphs for player: {player_name} #########################################################################################################################################")
+
             try: 
                 updated_process_params = update_process_params(player_name)
-                process_stats = self.process(*updated_process_params[:6])
+                process_stats = self.process(*updated_process_params[:10])
                 beliefs_fig, beliefs_percentages, summed_beliefs = self.create_beliefs_fig(*process_stats[:4])
 
                 sojourn_stats = self.sojourn_times(process_stats[4], 1)
@@ -258,17 +286,18 @@ class IndvPlayerMetrics:
         def update_process_params(player_name: str):
             test_player = self.extended_game_stats[player_name]
             game_shots = [] # holds the number of shots the player took in each game
+            game_ids = [] # holds the game ids
             for game_id, game_stats in enumerate(self.appended_game_stats):
                 for player, stats in game_stats.items():
                     if player == player_name:
                         game_shots.append(len(stats['three_point_sequence']))
-                        print(f"appending game {game_id} shots: {len(stats['three_point_sequence'])}, {stats['three_point_sequence']}")
+                        game_ids.append(game_id)
+                        # print(f"appending game {game_id} shots: {len(stats['three_point_sequence'])}, {stats['three_point_sequence']}")
             
-            game_shots[0] = game_shots[0] - sum(game_shots[1:])
-            return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], test_player['opp_def_3pt_pct_avg'], game_shots, player_name, self.appended_game_stats, self.extended_game_stats]
+            # game_shots[0] = game_shots[0] - sum(game_shots[1:])
+            return [test_player['three_point_sequence'], test_player['clock_time_sequence_three_point'], test_player['is_home_sequence_three_point'], test_player['opp_def_3pt_pct_avg'], test_player['three_point_game_num'], test_player['three_point_momentum'], test_player['three_point_intercept'], game_shots, game_ids, player_name, self.appended_game_stats, self.extended_game_stats]
 
-        
-        return app
+        return app, player_stats
 
     def create_beliefs_fig(self, all_beliefs: list, shot_sequence: list, game_shots: list, test_player_name: str):
         """
@@ -280,11 +309,11 @@ class IndvPlayerMetrics:
         top_beliefs_counts = [top_beliefs.count(i) for i in range(3)]
         summed_beliefs = [sum(beliefs[:, i]) for i in range(3)] # sum of all beliefs for each state
         summed_beliefs_percentages = [summed_beliefs[i] / sum(summed_beliefs) * 100 for i in range(3)]
-        print(f"\n\nsummed_beliefs: {summed_beliefs}\n\n")
+        # print(f"\n\nsummed_beliefs: {summed_beliefs}\n\n")
         
         top_beliefs_percentages = [top_beliefs_counts[i] / len(beliefs) * 100 for i in range(3)]
-        print(f"\n\ntop_beliefs: {top_beliefs}\n\ntop_beliefs_counts: {top_beliefs_counts}\n\n")
-        print(f"\n\ntop_beliefs_percentages: {top_beliefs_percentages}\n\n")
+        # print(f"\n\ntop_beliefs: {top_beliefs}\n\ntop_beliefs_counts: {top_beliefs_counts}\n\n")
+        # print(f"\n\ntop_beliefs_percentages: {top_beliefs_percentages}\n\n")
 
         x = list(range(1, len(beliefs) + 1))   # display shots as 1, 2, 3, ...
         made = [shot == 0 for shot in shot_sequence]
@@ -309,7 +338,7 @@ class IndvPlayerMetrics:
                 marker=dict(color='red', size=10, symbol='circle-open', line=dict(color='red', width=2)),
             ))
         for i in range(1, len(game_start_indices)):
-            print(f"Game start index: {game_start_indices[i]}")
+            # print(f"Game start index: {game_start_indices[i]}")
             fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='grey', width=2 ), name="Game Seperator Line")
             fig.update_layout(title=f'<b>Beliefs over Time</b> ', xaxis_title='Shot Number', yaxis_title='Belief Probability (%)')
             # 2. Add an annotation right below the title but above the data
@@ -328,9 +357,69 @@ class IndvPlayerMetrics:
     # LEGACY FORWARD FILTER (kept for single-game diagnostic use)
     # =============================================================================
 
-    def process(self, shot_sequence, clock_sequence, is_home_sequence, opp_def_3pt_pct_avg, game_shots, test_player_name,
-                initial_distribution=None,
-                gamma_C=0.2, gamma_N=0.32, gamma_H=0.48):
+
+
+    def log_belief_update( self,
+        shot_num,
+        made,
+        momentum,
+        previous_belief,
+        transition_belief,
+        likelihoods,
+        updated_belief,
+        P
+    ):
+        print("\n" + "=" * 75)
+        print(
+            f"Shot {shot_num} | "
+            f"{'MAKE' if made else 'MISS'} | "
+            f"Momentum={momentum:.3f}"
+        )
+
+        print("\nBelief:")
+        print(
+            f"  Previous:   "
+            f"C={previous_belief[0]:.3f} "
+            f"N={previous_belief[1]:.3f} "
+            f"H={previous_belief[2]:.3f}"
+        )
+
+        print(
+            f"  Transition: "
+            f"C={transition_belief[0]:.3f} "
+            f"N={transition_belief[1]:.3f} "
+            f"H={transition_belief[2]:.3f}"
+        )
+
+        print(
+            f"  Final:      "
+            f"C={updated_belief[0]:.3f} "
+            f"N={updated_belief[1]:.3f} "
+            f"H={updated_belief[2]:.3f}"
+        )
+
+        print("\nEmission:")
+        print(
+            f"  C={likelihoods[0]:.3f} "
+            f"N={likelihoods[1]:.3f} "
+            f"H={likelihoods[2]:.3f}"
+        )
+
+        print("\nBelief change:")
+        print(
+            f"  ΔC={updated_belief[0] - previous_belief[0]:+.3f} "
+            f"ΔN={updated_belief[1] - previous_belief[1]:+.3f} "
+            f"ΔH={updated_belief[2] - previous_belief[2]:+.3f}"
+        )
+
+        print("\nTransition matrix:")
+        print("              C       N       H")
+        print(f"From C     {P[0,0]:.3f}   {P[0,1]:.3f}   {P[0,2]:.3f}")
+        print(f"From N     {P[1,0]:.3f}   {P[1,1]:.3f}   {P[1,2]:.3f}")
+        print(f"From H     {P[2,0]:.3f}   {P[2,1]:.3f}   {P[2,2]:.3f}")
+
+    def process(self, shot_sequence, clock_sequence, is_home_sequence, opp_def_3pt_pct_avg, three_point_game_num, three_point_momentum, three_point_intercept, game_shots, game_ids, test_player_name,
+                initial_distribution=None):
         """
         Single-game forward filter (diagnostic / visualisation only).
         Prints shot-by-shot belief updates and transition statistics.
@@ -339,43 +428,84 @@ class IndvPlayerMetrics:
         if initial_distribution is None:
             initial_distribution = np.array([1/3, 1/3, 1/3])
 
-        gammas = [gamma_C, gamma_N, gamma_H]
+        gammas = self.gammas
         belief = np.array(initial_distribution, dtype=float)
 
         M = len(shot_sequence)
+        # Example Feature Standardization before building Xi_seq:
+        clock_std = (clock_sequence - np.mean(clock_sequence)) / (np.std(clock_sequence) + 1e-8)
+        opp_def_std = (opp_def_3pt_pct_avg - np.mean(opp_def_3pt_pct_avg)) / (np.std(opp_def_3pt_pct_avg) + 1e-8)
+        game_num_std = (three_point_game_num - np.mean(three_point_game_num)) / (np.std(three_point_game_num) + 1e-8)
+        three_point_momentum_std = (three_point_momentum - np.mean(three_point_momentum)) / (np.std(three_point_momentum) + 1e-8)
+        is_home_sequence_std = (is_home_sequence - np.mean(is_home_sequence)) / (np.std(is_home_sequence) + 1e-8)
+
         Xi_seq = np.column_stack([
-            np.array(clock_sequence[:M], dtype=float),
-            np.array(is_home_sequence[:M], dtype=float),
-            np.array(opp_def_3pt_pct_avg[:M], dtype=float),
+            np.array(clock_std[:M], dtype=float),
+            np.array(is_home_sequence_std[:M], dtype=float),
+            np.array(opp_def_std[:M], dtype=float),
+            np.array(game_num_std[:M], dtype=float),
+            np.array(three_point_momentum_std[:M], dtype=float),
+            np.array(three_point_intercept[:M], dtype=float),
         ])
 
         p = np.zeros((3, 3))
 
         all_beliefs = []
 
+        shot_game_ids = []
+        for count, gid in zip(game_shots, game_ids):
+            shot_game_ids.extend([gid] * count)
+
+        if len(shot_game_ids) != len(shot_sequence):
+            print(f"WARNING: shot_game_ids length ({len(shot_game_ids)}) != "
+                f"shot_sequence length ({len(shot_sequence)}) — game_shots/game_ids "
+                f"may be out of sync with the actual shot data.")
+
+
         for n, shot in enumerate(shot_sequence):
             made = (shot == 0)
             Xi_n = Xi_seq[n]
 
-            P = self.build_transition_matrix(Xi_n, game_id=0) # P is using the build_transition_matrix function from hothand_v2.py, and the updated global beta and b_i values
+            gid = shot_game_ids[n]
+
+            P = self.build_transition_matrix(Xi_n, game_id=gid) # P is using the build_transition_matrix function from hothand_v2.py, and the updated global beta and b_i values
+            previous_belief = belief.copy()
             predicted = belief @ P
 
             likelihoods = np.array([gammas[s] if made else (1 - gammas[s]) for s in range(3)])
             updated = likelihoods * predicted
             total = updated.sum()
+
             belief = updated / total if total > 0 else np.ones(3) / 3.0
+
+            self.log_belief_update(
+                shot_num=n,
+                made=made,
+                momentum=three_point_momentum[n],
+                previous_belief=previous_belief,
+                transition_belief=predicted,
+                likelihoods=likelihoods,
+                updated_belief=belief,
+                P=P
+            )
 
             p = P
 
             all_beliefs.append(belief)
 
-            print(f"Shot: {'make' if made else 'miss'} | "
+            if self.verbose:
+                print(f"Shot: {'make' if made else 'miss'} | "
                 f"P(C)={belief[0]:.3f}  P(N)={belief[1]:.3f}  P(H)={belief[2]:.3f}")
 
-        print(f"\nTransition matrix (last shot):")
-        for j, row in enumerate(p):
-            print(f"  {self.STATE_NAMES[j]}: {row}")
+        if self.verbose:
+            print(f"\nTransition matrix (last shot):")
+            for j, row in enumerate(p):
+                print(f"  {self.STATE_NAMES[j]}: {row}")
 
+        if not all_beliefs and self.verbose:
+            print(f"No shots for {test_player_name}; skipping occupancy/sojourn stats.")
+            return [all_beliefs, shot_sequence, game_shots, test_player_name, p, [[0.0, 0.0, 0.0], 0]]
+        
         # initial_state = np.where(all_beliefs[0] == max(all_beliefs[0]))[0][0]
         last_state = np.where(all_beliefs[-1] == max(all_beliefs[-1]))[0][0]
 
@@ -397,9 +527,10 @@ class IndvPlayerMetrics:
     def t_step_transition_probabilities(self, p, t=2):
         np_p = np.array(p)
         p_t = np.linalg.matrix_power(np_p, t)
-        print(f"\nTransition probabilities in {t} step(s):")
-        for row in p_t:
-            print(f"  {row}")
+        if self.verbose:
+            print(f"\nTransition probabilities in {t} step(s):")
+            for row in p_t:
+                print(f"  {row}")
 
 
     def sojourn_times(self, p, t=1):
@@ -419,9 +550,10 @@ class IndvPlayerMetrics:
         sojourn = [round(sojourn[j], 3) for j in range(3)]
         expected = [round(expected[j], 3) for j in range(3)]
 
-        print(f"\nSojourn time distribution P(sojourn={t}):")
-        for j in range(3):
-            print(f"  {self.STATE_NAMES[j]}: P={sojourn[j]:.3f}  |  E[sojourn]={expected[j]:.2f} shots")
+        if self.verbose:
+            print(f"\nSojourn time distribution P(sojourn={t}):")
+            for j in range(3):
+                print(f"  {self.STATE_NAMES[j]}: P={sojourn[j]:.3f}  |  E[sojourn]={expected[j]:.2f} shots")
 
         return [sojourn, expected]
 
@@ -442,16 +574,20 @@ class IndvPlayerMetrics:
             M_occ += P_power
             P_power = P_power @ np_p
 
-        print(f"\nOccupancy time matrix over {n} transitions ({n+1} shots):")
-        print(f"  {'':6} {'->C':>8} {'->N':>8} {'->H':>8}")
+        if self.verbose:
+            print(f"\nOccupancy time matrix over {n} transitions ({n+1} shots):")
+            print(f"  {'':6} {'->C':>8} {'->N':>8} {'->H':>8}")
         for j in range(3):
             row_str = "  ".join(f"{M_occ[j, k]:8.3f}" for k in range(3))
-            print(f"  {self.STATE_NAMES[j]}: {row_str}  (sum={M_occ[j].sum():.1f})")
+            if self.verbose:    
+                print(f"  {self.STATE_NAMES[j]}: {row_str}  (sum={M_occ[j].sum():.1f})")
 
         if initial_state is not None:
-            print(f"\nStarting from {self.STATE_NAMES[initial_state]}:")
+            if self.verbose:
+                print(f"\nStarting from {self.STATE_NAMES[initial_state]}:")
             for k in range(3):
-                print(f"  E[visits to {self.STATE_NAMES[k]}]: {M_occ[initial_state, k]:.3f}")
+                if self.verbose:
+                    print(f"  E[visits to {self.STATE_NAMES[k]}]: {M_occ[initial_state, k]:.3f}")
                 M_occ_init_state.append(round(float(M_occ[initial_state, k]), 3))
             return M_occ_init_state
 
