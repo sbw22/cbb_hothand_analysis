@@ -171,6 +171,9 @@ class IndvPlayerMetrics:
                 html.Br(), 
                 html.Br(), 
                 "\tThis project aims to provide another tool for coaches, analysts, and other basketball enthusiasts to help them identify players with a hot hand. This model uses a Bayesian approach to calculate the player's statistical probabilities of being in each state (Cold, Neutral, Hot) over time.",
+                html.Br(), 
+                html.Br(), 
+                "Note: this site currently uses conference and postseason data from Big 12 teams from the 2025-2026 season."
             ],
             
             style={'font-size': '14px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'margin-bottom': '20px', 'white-space': 'pre-wrap'}),
