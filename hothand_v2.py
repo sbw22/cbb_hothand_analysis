@@ -1130,15 +1130,16 @@ def main():
         # plot_trace(samples, warmup=5)
         apply_mcmc_samples_to_globals(samples, method='mean')
 
-        # Save so the *next* dev-loop run can warm-start from this one
-        '''with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
-            pickle.dump(samples, f)
-        print(f"Saved samples to mcmc_samples.pkl")
-
-        # Save gammas to a file
-        with open('stats_and_samples/gammas.pkl', 'wb') as f:
-            pickle.dump(gammas, f)
-        print(f"Saved gammas to gammas.pkl")'''
+        if not in_prod:
+            # Save so the *next* dev-loop run can warm-start from this one
+            with open('stats_and_samples/mcmc_samples.pkl', 'wb') as f:
+                pickle.dump(samples, f)
+            print(f"Saved samples to mcmc_samples.pkl")
+            
+            # Save gammas to a file
+            with open('stats_and_samples/gammas.pkl', 'wb') as f:
+                pickle.dump(gammas, f)
+            print(f"Saved gammas to gammas.pkl")
 
     else:
         # If the files don't exist, run the MCMC
