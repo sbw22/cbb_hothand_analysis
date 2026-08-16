@@ -1339,6 +1339,8 @@ def main():
             pickle.dump(appended_game_stats, f)
         with open('stats_and_samples/all_games_for_mcmc.pkl', 'wb') as f:
             pickle.dump(all_games_for_mcmc, f)
+        with open('stats_and_samples/gammas.pkl', 'wb') as f:
+            pickle.dump(gammas, f)
         
 
 
@@ -1373,41 +1375,6 @@ def main():
         gammas_mean = np.mean(samples['gammas'], axis=0).tolist()
         # print(f"Initializing dash app")
 
-        all_player_stats = {}
-        counter = 0
-        for player in all_player_names:
-            temp_test_player = extended_game_stats[player]
-            if len(temp_test_player.get('three_point_sequence', [])) < 1:
-                print(f"Skipping {player}: no three-point shots")
-                continue
-            temp_game_shots = []
-            temp_game_ids = []
-            for game_id, game_stats in enumerate(appended_game_stats):
-                if player in game_stats:
-                    temp_game_shots.append(len(game_stats[player]['three_point_sequence']))
-                    temp_game_ids.append(game_id)
-            temp_process_params = [temp_test_player['three_point_sequence'], temp_test_player['clock_time_sequence_three_point'], temp_test_player['is_home_sequence_three_point'], temp_test_player['opp_def_3pt_pct_avg'], temp_test_player['three_point_game_num'], temp_test_player['three_point_momentum'], temp_test_player['three_point_intercept'], temp_game_shots, temp_game_ids, player, appended_game_stats, extended_game_stats]
-            app, temp_player_stats = indv_player_metrics.init_dash_app(player, temp_process_params, all_player_names, gammas_mean)
-            temp_player_stats['team_name'] = extended_game_stats[player]['team_name']
-            counter += 1
-            if counter > 100:
-                break
-            all_player_stats[player] = temp_player_stats
-        
-        # Store all player stats in a json file
-        def _json_default(o):
-            if isinstance(o, np.integer):
-                return int(o)
-            if isinstance(o, np.floating):
-                return float(o)
-            if isinstance(o, np.bool_):
-                return bool(o)
-            if isinstance(o, np.ndarray):
-                return o.tolist()
-            raise TypeError(f'Object of type {type(o).__name__} is not JSON serializable')
-
-        with open('all_player_hothand_stats.json', 'w') as f:
-            json.dump(all_player_stats, f, default=_json_default)
         
         app, player_stats = indv_player_metrics.init_dash_app(test_player_name, process_params, all_player_names, gammas_mean, verbose=True)
         # print(f"Dash app initialized")

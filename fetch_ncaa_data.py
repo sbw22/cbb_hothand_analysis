@@ -324,21 +324,15 @@ class NCAADataFetcher:
             return {}
 
         
-        # For some reason, each play is duplicated in the play-by-play data, so for now I am just going to skip the next event when we record an event.
-        skip_counter = False
-
         # Walk every period, then each play within the period, and attach the play to the
         # best actor label we can infer from the payload.
         for period in pbp_data['periods']:
 
             # My code starts here
             counter = 0
+            last_shot = None  # (player, is_make, clock) — drop consecutive PBP duplicates of the same shot
             for play in period['playbyplayStats']:
                 # print(f"")
-                
-                if skip_counter:
-                    skip_counter = False
-                    continue
 
                 play_list = play['eventDescription'].split()
                 # print(f"play: {play}")
@@ -387,7 +381,10 @@ class NCAADataFetcher:
                     player_stats[player_name] = {'two_point_sequence': [], 'three_point_sequence': [], 'clock_time_sequence_two_point': [], 'clock_time_sequence_three_point': [], 'is_home_sequence_two_point': [], 'is_home_sequence_three_point': [], 'opp_def_3pt_pct_avg': [], 'three_point_game_num': [], 'three_point_momentum': [], 'three_point_intercept': [], 'team_name': ""}  # 0 = make, 1 = miss
                     # three_point_intercept is a list of 1s that lets each transition pair learn its own baseline log-odds seperately from the feature effects
 
-                
+                shot_key = (player_name, 'makes' in play_list, clock_time)
+                if shot_key == last_shot:
+                    continue
+
                 # Record whether the shot was a make or miss (0 or 1) in the appropriate sequence list for the player. This is a simple way to 
                 # track the player's shooting performance over time, and we can analyze these sequences later to identify hot hand patterns.
                 if 'makes' in play_list and 'three' in play_list and 'point' in play_list and 'shot' in play_list:
@@ -430,8 +427,7 @@ class NCAADataFetcher:
                     jdsfb'''
                 
                 
-                skip_counter = True # Set the skip counter to True so that the next event will be skipped, 
-                # which should prevent us from processing the duplicate event in the play-by-play data.
+                last_shot = shot_key
                 counter += 1
         if 'Tre White' in player_stats:
             player_stats = self.create_synthetic_player_stats(player_stats)

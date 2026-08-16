@@ -1,0 +1,36 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: darkgray;
+}
+
+#_dash-app-content {
+    min-height: 100vh;
+    background-color: darkgray;
+}
+
+#player-dropdown .Select-control,
+#player-dropdown .Select-menu-outer,
+#player-dropdown .Select-option,
+#player-dropdown .Select-value,
+#player-dropdown .Select-input,
+#player-dropdown .Select-placeholder,
+#player-dropdown .Select__control,
+#player-dropdown .Select__menu,
+#player-dropdown .Select__option,
+#player-dropdown .Select__value-container,
+#player-dropdown .Select__single-value {
+    background-color: lightgray !important;
+}
+
+#player-dropdown .Select-option.is-focused,
+#player-dropdown .Select-option:hover,
+#player-dropdown .Select__option--is-focused,
+#player-dropdown .Select__option:hover {
+    background-color: #c0c0c0 !important;
+}
+
+.Select-control {
+    background-color: lightgray !important;
+}
+

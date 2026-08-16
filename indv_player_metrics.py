@@ -18,14 +18,18 @@ class IndvPlayerMetrics:
         self.verbose = verbose
 
         def create_occupancy_fig(occupancy_times: list):
-            occupancy_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=occupancy_times, title='Expected Number of Shots in Each State -- Next Ten Shots', color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
+            occupancy_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=occupancy_times, color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
             occupancy_fig.update_layout(
-                title='<b>Expected Number of Shots in Each State -- Next Ten Shots</b>',
+                title=None,
                 autosize=True,
                 width=None,
                 height=None,
                 margin=dict(l=40, r=20, t=50, b=40),
                 showlegend=False,
+                paper_bgcolor='lightgray',
+                plot_bgcolor='lightgray',
+                xaxis=dict(showgrid=False, zeroline=False, showline=False),
+                yaxis=dict(showgrid=False, zeroline=False, showline=False),
             )
             occupancy_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
             occupancy_fig.update_yaxes(title=' # of Expected Shots in Each State')
@@ -34,14 +38,18 @@ class IndvPlayerMetrics:
             return occupancy_fig
 
         def create_sojourn_fig(sojourn_times: list):
-            sojourn_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=sojourn_times, title='Expected Number of Shots to Leave State', color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
+            sojourn_fig = px.bar(x=self.STATE_NAMES_DISPLAY, y=sojourn_times, color=self.STATE_NAMES_DISPLAY, color_discrete_map=self.STATE_COLORS, text_auto=True)
             sojourn_fig.update_layout(
-                title='<b>Expected Number of Shots to Leave State</b>',
+                title=None,
                 autosize=True,
                 width=None,
                 height=None,
                 margin=dict(l=40, r=20, t=50, b=40),
                 showlegend=False,
+                paper_bgcolor='lightgray',
+                plot_bgcolor='lightgray',
+                xaxis=dict(showgrid=False, zeroline=False, showline=False),
+                yaxis=dict(showgrid=False, zeroline=False, showline=False),
             )
             sojourn_fig.update_xaxes(title='State', ticktext=self.STATE_NAMES_DISPLAY)
             sojourn_fig.update_yaxes(title='# of Shots to Leave State')
@@ -90,21 +98,26 @@ class IndvPlayerMetrics:
                 insidetextanchor='middle',
             ))
 
-            title_text = "Amount of Time as Most Likely State" if not is_summed else "Share of Total Shot Probabilities"
+            # title_text = "Amount of Time as Most Likely State" if not is_summed else "Share of Total Shot Probabilities"
             hover_tooltip = (
                 "Shows the percentage of shots where each state was the single most likely state." 
                 if not is_summed else 
-                "Calculated by summing the state probabilities across all shots and converting each state's total into a percentage."
+                "Summed the state probabilities across all shots and converted each state's total into a percentage."
             )
 
             # 3. Force the layout to stack the bars next to each other
             fig.update_layout(
                 title="Percentage of Shots as Most Likely State" if not is_summed else "Share of Total Shot Probabilities",
+                # make title text bold
+                title_font_weight='bold',
+                title_font_size=12,
+                plot_bgcolor='lightgray',
+                paper_bgcolor='lightgray',
                 title_x=0.5,
                 title_y=0.9,
                 barmode='stack',
-                xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False),
-                yaxis=dict(showticklabels=False, showgrid=False),
+                xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False, zeroline=False, showline=False),
+                yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False),
                 margin=dict(l=20, r=20, t=40, b=20),
                 height=100,
                 showlegend=False,
@@ -113,7 +126,7 @@ class IndvPlayerMetrics:
             # Add an interactive info tooltip right next to the title
             fig.add_annotation(
                 text="<b>ⓘ</b>",
-                x=0.88,  # Adjusts horizontal positioning right next to title
+                x=0.91 if is_summed else 1.055,  # Adjusts horizontal positioning right next to title
                 y=1.9,  # Places it in the title area
                 xref="paper",
                 yref="paper",
@@ -164,7 +177,7 @@ class IndvPlayerMetrics:
         }
 
         app.layout = html.Div(children=[
-            html.H1(f'Hot Hand Probability Analysis', style={'text-align': 'center'}),
+            html.H1(f'Hot Hand Probability Analysis', style={'text-align': 'center', 'font-size': '38px'}),
 
             html.Pre(children=[
                 "\tHow do you know if a player is on a hot streak? The short answer is that you can't. Coaches even at the highest levels of the game have had trouble identifying players with a hot hand. This has led to inefficiencies in a coach's ability to use a player's hot hand to their advantage. However, while it is difficult to identify a player's hot hand, coaches use many different tools and resources to help them identify players with a hot hand, including their own intuition and observations of the player's performance.", 
@@ -173,7 +186,7 @@ class IndvPlayerMetrics:
                 "\tThis project aims to provide another tool for coaches, analysts, and other basketball enthusiasts to help them identify players with a hot hand. This model uses a Bayesian approach to calculate the player's statistical probabilities of being in each state (Cold, Neutral, Hot) over time.",
                 html.Br(), 
                 html.Br(), 
-                "Note: this site currently uses conference and postseason data from Big 12 teams from the 2025-2026 season."
+                "Note: this site currently uses conference data from Big 12 teams from the 2025-2026 season."
             ],
             
             style={'font-size': '14px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'margin-bottom': '20px', 'white-space': 'pre-wrap'}),
@@ -183,15 +196,19 @@ class IndvPlayerMetrics:
                 options=[{'label': player, 'value': player} for player in all_player_names],
                 value = test_player_name,
                 clearable=False,
-                style={'font-size': '20px', 'color': 'black', 'width': '20%', 'margin': '0 auto', 'text-align': 'center'}
+                style={'font-size': '20px', 'color': 'black', 'width': '20%', 'margin': '0 auto', 'text-align': 'center', 'background-color': 'lightgray'}
             ),
             # This plot shows the player's probabilities of being in each state <br>over time. Each line represents the probability of the player being in that <br>specific state. The shots that were made and missed are marked with a <br>green and red circle respectively.",
             
             html.Div(children=[
-                
+                html.H3(
+                    'Beliefs Over Time',
+                    style={'text-align': 'center', 'margin': '16px 20px 0 20px', 'font-size': '32px', 'width': '90%'},
+                ),
                 dcc.Graph(
                     id='beliefs-graph', 
                     figure=beliefs_fig,
+                    style={'width': '100%', 'border-radius': '40px'}
                 ),
 
                 html.Div(children=[
@@ -200,53 +217,62 @@ class IndvPlayerMetrics:
                         id='belief-occupancy-graph', 
                         figure=belief_occupancy_fig,
                         config={'displayModeBar': False},
-                        style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
+                        style={'width': '45%', 'margin': '0 auto', 'text-align': 'center'}
                     ),
                     dcc.Graph(
                         id='summed-beliefs-graph', 
                         figure=summed_beliefs_fig,
                         config={'displayModeBar': False},
-                        style={'width': '70%', 'margin': '0 auto', 'text-align': 'center'}
+                        style={'width': '50%', 'margin': '0 auto', 'text-align': 'center'}
                     ),
-                ], style={'display': 'flex', 'flexDirection': 'row', 'width': '100%', 'gap': '0px', 'margin': '0 auto'}),
+                ], style={'display': 'flex', 'flexDirection': 'row', 'width': '90%'}),
 
                 html.Div(
                     html.P("This plot shows the player's probabilities of being in each state over time. Each line represents the probability of the player being in that specific state over time. The shots that were made and missed are marked with a green and red circle respectively."),
-                    style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'height': '60px'}
+                    style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'height': '60px', 'width': '80%'}
                 ),
 
-            ], style={'display': 'flex', 'flexDirection': 'column', 'width': '100%', 'gap': '0px', 'margin': '0 auto', 'height': '100%', 'border': '2px solid black', 'margin-top': '10px', 'padding-bottom': '25px'}),
+            ], style={'display': 'flex', 'flexDirection': 'column', 'height': '100%', 'align-items': 'center', 'border-radius': '40px', 'margin-top': '20px', 'margin-bottom': '30px', 'width': '70%', 'padding': '50px', 'padding-top': '20px', 'background-color': 'lightgray'}),
 
             html.Div(children=[
                 html.Div( children=[
-                
+                    html.H3(
+                        'Expected Number of Shots to Leave State',
+                        style={'text-align': 'center', 'margin': '16px 20px 0 20px', 'font-size': '22px', 'width': '90%'},
+                    ),
                     html.Div(
-                        dcc.Graph(id='sojourn-graph', figure=sojourn_fig, style={'width': '100%', 'height': '400px'}, responsive=True),
+                        dcc.Graph(id='sojourn-graph', figure=sojourn_fig, style={'height': '400px', 'width': '60%'}, responsive=True),
+                        style={'display': 'flex', 'justifyContent': 'center', 'width': '100%'},
                     ),
 
                     html.Div(
                         html.P("This plot shows the expected number of shots the player is expected to be in each state before leaving that state."),
-                        style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'height': '50px'}
+                        style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'height': '50px', 'width': '60%'}
                     ),
-                ], style={'flex': '1', 'minWidth': 0, 'border': '2px solid black', 'padding': '10px'}),
+                ], style={'border-radius': '40px','display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '30%', 'padding-bottom': '60px', 'background-color': 'lightgray'}),
 
 
                 html.Div( children=[
-                
+                    html.H3(
+                        'Expected Number of Shots in Each State -- Next Ten Shots',
+                        style={'text-align': 'center', 'margin': '16px 20px 0 20px', 'font-size': '22px', 'width': '90%'},
+                    ),
                     html.Div(
-                        dcc.Graph(id='occupancy-graph', figure=occupancy_fig, style={'width': '100%', 'height': '400px'}, responsive=True),
+                        dcc.Graph(id='occupancy-graph', figure=occupancy_fig, style={'height': '400px', 'width': '60%'}, responsive=True),
+                        style={'display': 'flex', 'justifyContent': 'center', 'width': '100%'},
                     ),
 
                     html.Div(
                         html.P("This plot shows the expected number of shots the player is expected to take in each state over the next 10 shots."),
-                        style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'width': '80%', 'margin': '0 auto', 'height': '50px'}
+                        style={'font-size': '20px', 'color': 'black', 'text-align': 'left', 'height': '50px', 'width': '60%'}
                     ),
 
-                ], style={'flex': '1', 'minWidth': 0, 'border': '2px solid black', 'padding': '10px'}),
+                ], style={'border-radius': '40px', 'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'width': '30%', 'padding-bottom': '60px', 'background-color': 'lightgray'}),
 
-            ], style={'display': 'flex', 'flexDirection': 'row', 'width': '100%', 'gap': '0px', 'margin': '0 auto'}),
+            ], style={'display': 'flex', 'flexDirection': 'row', 'width': '100%', 'justifyContent': 'center', 'gap': '200px', 'border-radius': '40px', 'padding': '50px'}),
 
-        ])
+        ], style={'display': 'flex', 'flexDirection': 'column', 'align-items': 'center', 'background-color': 'darkgray', 'margin': '0'})
+
 
 
         @callback(
@@ -325,9 +351,9 @@ class IndvPlayerMetrics:
         marker_y = 0   # sit on the x-axis
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 0], mode='lines', name='Probability of Being Cold', line=dict(color='blue')))
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 1], mode='lines', name='Probability of Being Neutral', line=dict(color='green')))
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 2], mode='lines', name='Probability of Being Hot', line=dict(color='red')))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 0], mode='lines', name='Probability of Being Cold', line=dict(color='blue', width=1)))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 1], mode='lines', name='Probability of Being Neutral', line=dict(color='green', width=1)))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 2], mode='lines', name='Probability of Being Hot', line=dict(color='red', width=1)))
         made_x = [x[i] for i, is_made in enumerate(made) if is_made]
         missed_x = [x[i] for i, is_made in enumerate(made) if not is_made]
         if made_x:
@@ -342,17 +368,38 @@ class IndvPlayerMetrics:
             ))
         for i in range(1, len(game_start_indices)):
             # print(f"Game start index: {game_start_indices[i]}")
-            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='grey', width=2 ), name="Game Seperator Line")
-            fig.update_layout(title=f'<b>Beliefs over Time</b> ', xaxis_title='Shot Number', yaxis_title='Belief Probability (%)')
+            fig.add_vline(x=game_start_indices[i]-0.5, line=dict(color='darkgrey', width=2 ), name="Game Seperator Line")
             # 2. Add an annotation right below the title but above the data
 
         # legend-only stub
-        fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines', name='Game Separator Line', line=dict(color='grey', width=2)))
-        
-        fig.update_yaxes(range=[0, y_max+0.1])
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode='lines', name='Game Separator Line', line=dict(color='darkgrey', width=2)))
+
+        fig.update_yaxes(
+            range=[0, y_max+0.1],
+            gridcolor='lightgrey',
+            linecolor='lightgrey',
+            zeroline=False,
+            showline=True,
+        )
+        fig.update_xaxes(
+            gridcolor='lightgrey',
+            linecolor='lightgrey',
+            zeroline=False,
+            showline=True,
+            tickvals=list(range(0, len(beliefs), 10)),
+            ticktext=list(range(0, len(beliefs), 10)),
+            tickcolor='lightgrey',
+        )
         fig.update_layout(
-            # margin=dict(t=150),
-            legend=dict(orientation="h", yanchor="top", y=1.02, xanchor="right", x=1, ))
+            title=None,
+            xaxis_title='Shot Number',
+            yaxis_title='Belief Probability (%)',
+            margin=dict(t=40, l=70, r=30, b=60),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            plot_bgcolor='lightgray',
+            paper_bgcolor='lightgray',
+            font=dict(color='black'),
+            )
 
         return fig, top_beliefs_percentages, summed_beliefs_percentages
 
