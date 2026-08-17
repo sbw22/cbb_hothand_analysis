@@ -12,4 +12,4 @@ if __name__ == "__main__":
     app = hothand_v2.main()
     server = app.server
 
-    app.run(debug=True, port=8080) '''
+    app.run(debug=True, port=8080)'''
