@@ -351,9 +351,9 @@ class IndvPlayerMetrics:
         marker_y = 0   # sit on the x-axis
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 0], mode='lines', name='Probability of Being Cold', line=dict(color='blue', width=2.5)))
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 1], mode='lines', name='Probability of Being Neutral', line=dict(color='green', width=2.5)))
-        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 2], mode='lines', name='Probability of Being Hot', line=dict(color='red', width=2.5)))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 0], mode='lines', name='Probability of Being Cold', line=dict(color='blue', width=3.5)))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 1], mode='lines', name='Probability of Being Neutral', line=dict(color='green', width=3.5)))
+        fig.add_trace(go.Scatter(x=x, y=beliefs[:, 2], mode='lines', name='Probability of Being Hot', line=dict(color='red', width=3.5)))
         made_x = [x[i] for i, is_made in enumerate(made) if is_made]
         missed_x = [x[i] for i, is_made in enumerate(made) if not is_made]
         if made_x:
